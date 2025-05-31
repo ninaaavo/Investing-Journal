@@ -7,7 +7,6 @@ export default function StockCard() {
         <div>Shares: 10</div>
         <div>Bought Price: $100</div>
         <div>Current Price: $120</div>
-        <div>Last transaction: 1:23pm 5/23/2025</div>
 
     </div>
   );

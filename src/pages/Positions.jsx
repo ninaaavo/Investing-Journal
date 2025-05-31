@@ -9,9 +9,9 @@ export default function Positions() {
           <div className="text-lg font-medium">Add stock</div>
           <AddStockSmall />
         </div>
-                  <div className="text-lg font-medium">Current Stocks</div>
+        <div className="text-lg font-medium">Current Stocks</div>
 
-        <div className="overflow-y-auto w-[640px]">
+        <div className="overflow-y-auto w-[640px] p-6">
           <div className="flex flex-wrap gap-6">
             <StockCard />
             <StockCard />
