@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 
 export default function AddStockSmall() {
   const [form, setForm] = useState({
@@ -19,57 +20,74 @@ export default function AddStockSmall() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-fit ">
-      <div className="flex gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-700">
-            Stock Name
-          </label>
-          <input
-            type="text"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="e.g. AAPL"
-            className="w-[150px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            required
-          />
-        </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-700">Shares</label>
-          <input
-            type="number"
-            name="shares"
-            value={form.shares}
-            onChange={handleChange}
-            placeholder="e.g. 10"
-            className="w-[150px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            required
-          />
-        </div>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        delay: 0.1,
+        duration: 0.5,
+        ease: "easeOut",
+        layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] },
+      }}
+      layout
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-fit "
+      >
+        <div className="flex gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">
+              Stock Name
+            </label>
+            <input
+              type="text"
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              placeholder="e.g. AAPL"
+              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">Shares</label>
+            <input
+              type="number"
+              name="shares"
+              value={form.shares}
+              onChange={handleChange}
+              placeholder="e.g. 10"
+              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+          </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-700">Price</label>
-          <input
-            type="number"
-            name="price"
-            value={form.price}
-            onChange={handleChange}
-            placeholder="e.g. 175"
-            className="w-[150px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            required
-          />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium text-gray-700">Price</label>
+            <input
+              type="number"
+              name="price"
+              value={form.price}
+              onChange={handleChange}
+              placeholder="e.g. 175"
+              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-transparent font-medium text-gray-700 select-none">
+              /
+            </label>
+            <button
+              type="submit"
+              className="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              Add Stock
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-2">
-          <label className="text-sm text-transparent font-medium text-gray-700 select-none">/</label>
-          <button
-            type="submit"
-            className="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          >
-            Add Stock
-          </button>
-        </div>
-      </div>
-    </form>
+      </form>
+    </motion.div>
   );
 }

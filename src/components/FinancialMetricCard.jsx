@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { motion } from "framer-motion";
 import MetricsCard from "./MetricsCard";
 
 const FinancialMetricCard = () => {
@@ -19,11 +20,11 @@ const FinancialMetricCard = () => {
     "YTD": "$432.75",
     "All Time": "$1,123.88",
   };
-  
-  const setTimeRangeCheck = (v) =>{
+
+  const setTimeRangeCheck = (v) => {
     console.log("hi, changing to", v);
     setTimeRange(v);
-  }
+  };
 
   const financialFields = useMemo(() => [
     {
@@ -33,7 +34,7 @@ const FinancialMetricCard = () => {
       selected: timeRange,
       onChange: setTimeRangeCheck,
       baseValue: plValues[timeRange],
-      info: "Profit or loss based on selected time range. Helps assess short-term portfolio changes."
+      info: "Profit or loss based on selected time range. Helps assess short-term portfolio changes.",
     },
     {
       label: "Cash on Hand",
@@ -56,21 +57,25 @@ const FinancialMetricCard = () => {
       selected: dividendRange,
       onChange: (value) => setDividendRange(value),
       baseValue: dividendValues[dividendRange],
-      info: "Track how much income your investments generate over time."
+      info: "Track how much income your investments generate over time.",
     },
     {
       label: "Avg Holding Duration",
       value: "104 days",
-      info: "Helps assess how long you typically hold investments before selling."
+      info: "Helps assess how long you typically hold investments before selling.",
     },
     {
       label: "Expense Ratio",
       value: "0.11%",
-      info: "Average annual cost of owning ETFs in your portfolio. Lower is usually better."
+      info: "Average annual cost of owning ETFs in your portfolio. Lower is usually better.",
     },
   ], [timeRange, dividendRange, cash]);
 
-  return <MetricsCard title="Financial Metrics" fields={financialFields} />;
+  return (
+    <motion.div layout>
+      <MetricsCard title="Financial Metrics" fields={financialFields} />
+    </motion.div>
+  );
 };
 
 export default FinancialMetricCard;

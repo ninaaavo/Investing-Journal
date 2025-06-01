@@ -1,46 +1,56 @@
-import { useEffect, useState } from "react";
+// NavBar.jsx
 import { Link, useLocation } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../firebase";
+import { motion } from "framer-motion";
 
-export default function NavBar() {
+export default function NavBar({ user }) {
   const { pathname } = useLocation();
-  const [user, setUser] = useState(null);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsub();
-  }, []);
+  const links = [
+    { to: "/profile", label: "Profile" },
+    { to: "/positions", label: "My Positions" },
+    { to: "/journal", label: "Journal" },
+  ];
 
-  const navLinkClass = (path) =>
-    `px-4 py-2 rounded-md hover:bg-muted transition ${
-      pathname === path ? "bg-muted font-semibold" : "text-gray-600"
-    }`;
+  if (!user) return null;
 
-  console.log("im nav bar, user is", user)
   return (
-    <div>
-      {user && (
-        <nav className="bg-[var(--color-nav-background)] px-12 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">📈 InvestLog</h1>
+    <motion.nav
+      initial={{ y: -10, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
+      className="bg-white px-6 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl"
+    >
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl w-[400px]">
+          ☼ Hello there,{" "}
+          <span className="font-medium">
+            {user.displayName?.split(" ")[0]}
+          </span>
+        </h1>
+        <h1 className="text-2xl font-bold">InvestLog</h1>
 
-            <div className="flex space-x-4">
-              <Link to="/profile" className={navLinkClass("/profile")}>
-                Profile
+        <div className="flex space-x-6 relative justify-end w-[400px]">
+          {links.map(({ to, label }) => (
+            <div key={to} className="relative">
+              <Link
+                to={to}
+                className={`px-4 py-2 transition text-gray-600 ${
+                  pathname === to ? "text-black" : "hover:text-black"
+                }`}
+              >
+                {label}
               </Link>
-              <Link to="/positions" className={navLinkClass("/positions")}>
-                My Positions
-              </Link>
-              <Link to="/journal" className={navLinkClass("/journal")}>
-                Journal
-              </Link>
+              {pathname === to && (
+                <motion.div
+                  layoutId="nav-underline"
+                  className="absolute left-0 right-0 -bottom-1 h-[2px] bg-black rounded"
+                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                />
+              )}
             </div>
-          </div>
-        </nav>
-      )}
-    </div>
+          ))}
+        </div>
+      </div>
+    </motion.nav>
   );
 }
