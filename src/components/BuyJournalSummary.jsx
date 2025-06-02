@@ -15,7 +15,7 @@ export default function BuyJournalSummary({
   const isGain = change >= 0;
 
   return (
-    <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[660px]">
+    <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">
       <span className=" absolute top-10 right-8 px-3 py-1 text-sm rounded-full font-semibold bg-green-100 text-green-800">
         Buy{" "}
       </span>

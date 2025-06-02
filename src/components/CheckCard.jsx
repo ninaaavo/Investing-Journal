@@ -2,7 +2,7 @@ import { CheckCircle, Circle } from "lucide-react";
 
 export default function CompanyQualityCheck({ title = "Company Quality", criteria = [] }) {
   return (
-    <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-80">
+    <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)]">
       <h2 className="text-xl font-semibold text-primary mb-4">{title}</h2>
       <ul className="space-y-4">
         {criteria.map((item, index) => (

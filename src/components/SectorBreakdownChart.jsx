@@ -10,7 +10,6 @@ import {
   LabelList,
   Cell,
 } from "recharts";
-
 const SectorBreakdownChart = () => {
   const data = [
     { name: "Technology", value: 40 },
@@ -24,10 +23,9 @@ const SectorBreakdownChart = () => {
   const maxValue = Math.max(...data.map(d => d.value));
   const minValue = Math.min(...data.map(d => d.value));
 
-  // Generate gradual green shades from #6bad6e (light) to #446c57 (dark) based on value
   const getGreenShade = (value) => {
-    const darkGreen = [68, 108, 87]; // #446c57
-    const lightGreen = [107, 173, 110]; // #6bad6e
+    const darkGreen = [68, 108, 87];
+    const lightGreen = [107, 173, 110];
     const ratio = (value - minValue) / (maxValue - minValue);
     const r = Math.floor(lightGreen[0] + (darkGreen[0] - lightGreen[0]) * ratio);
     const g = Math.floor(lightGreen[1] + (darkGreen[1] - lightGreen[1]) * ratio);
@@ -35,20 +33,24 @@ const SectorBreakdownChart = () => {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
+  // Precompute cutoff index
+  const cutoffIndex = data.findIndex(d => d.name.length * 6.5 + 8 > d.value * 5); // rough estimate
+  const effectiveCutoff = cutoffIndex === -1 ? data.length : cutoffIndex;
+
   const DynamicNameLabel = (props) => {
     const { x, y, width, height, index } = props;
     const barValue = data[index].value;
     const label = data[index].name;
     const estimatedTextWidth = label.length * 6.5;
 
-    const isTooSmall = width < estimatedTextWidth + 8;
-    const labelX = x + 5;
-    const percentX = x + width + 5;
-    const fill = isTooSmall ? "#333" : "#fff";
+    const shouldShowOutside = index >= effectiveCutoff;
+    const labelX = shouldShowOutside ? x + 5 : x + 5;
+    const percentX = shouldShowOutside ? x + width + 5 : x + width + 5;
+    const fill = shouldShowOutside ? "#333" : "#fff";
 
     return (
       <>
-        {!isTooSmall && (
+        {!shouldShowOutside && (
           <text
             x={labelX}
             y={y + height / 2}
@@ -66,19 +68,17 @@ const SectorBreakdownChart = () => {
           fontSize={12}
           alignmentBaseline="middle"
         >
-          {isTooSmall ? `${label}: ${barValue}%` : `${barValue}%`}
+          {shouldShowOutside ? `${label}: ${barValue}%` : `${barValue}%`}
         </text>
       </>
     );
   };
 
-  const DynamicValueLabel = () => null; // Hide separate value label when name includes it
+  const DynamicValueLabel = () => null;
 
   return (
     <div className="w-full h-[350px] bg-white rounded-xl shadow-md p-4">
-      <h2 className="text-lg font-semibold text-gray-800 mb-2">
-        Sector Breakdown
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-800 mb-2">Sector Breakdown</h2>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={data}
@@ -104,5 +104,6 @@ const SectorBreakdownChart = () => {
     </div>
   );
 };
+
 
 export default SectorBreakdownChart;

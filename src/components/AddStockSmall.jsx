@@ -33,10 +33,10 @@ export default function AddStockSmall() {
     >
       <form
         onSubmit={handleSubmit}
-        className="p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-fit "
+        className="p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[100%] "
       >
         <div className="flex gap-4">
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-1/4">
             <label className="text-sm font-medium text-gray-700">
               Stock Name
             </label>
@@ -46,11 +46,11 @@ export default function AddStockSmall() {
               value={form.name}
               onChange={handleChange}
               placeholder="e.g. AAPL"
-              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-1/4">
             <label className="text-sm font-medium text-gray-700">Shares</label>
             <input
               type="number"
@@ -58,12 +58,12 @@ export default function AddStockSmall() {
               value={form.shares}
               onChange={handleChange}
               placeholder="e.g. 10"
-              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 w-1/4">
             <label className="text-sm font-medium text-gray-700">Price</label>
             <input
               type="number"
@@ -71,20 +71,25 @@ export default function AddStockSmall() {
               value={form.price}
               onChange={handleChange}
               placeholder="e.g. 175"
-              className="w-[148px] border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               required
             />
           </div>
+
           <div className="flex flex-col gap-2">
             <label className="text-sm text-transparent font-medium text-gray-700 select-none">
               /
             </label>
-            <button
+
+            <motion.button
               type="submit"
-              className="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 20 }}
+              className="rounded-md px-4 py-2 text-sm font-bold text-white bg-[var(--color-primary)] hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-primary active:border active:border-gray-300 active:bg-transparent active:text-[var(--color-primary)]"
             >
               Add Stock
-            </button>
+            </motion.button>
           </div>
         </div>
       </form>

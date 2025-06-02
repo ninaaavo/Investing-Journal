@@ -1,22 +1,60 @@
+import { useRef, useState, useEffect } from "react";
 import FinancialMetricsCard from "./FinancialMetricCard";
 import PerformanceInsightsCard from "./PerformanceInsightCard";
 import BehavioralMetricsCard from "./BehavioralMetricCard";
 import TimeSummaryCard from "./TimeSummaryCard";
 import SectorBreakdownChart from "./SectorBreakdownChart";
+import NotesCard from "./NotesCard";
+
 export default function OverviewCard() {
+  const scrollRef = useRef(null);
+  const [showTopFade, setShowTopFade] = useState(false);
+  const [showBottomFade, setShowBottomFade] = useState(false);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      setShowTopFade(scrollTop > 0);
+      setShowBottomFade(scrollTop + clientHeight < scrollHeight - 1);
+    };
+
+    handleScroll(); // run once on mount
+    el.addEventListener("scroll", handleScroll);
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <div className="h-[calc(100vh-250px)] overflow-y-auto px-6 pt-4 pb-6">
-      <div className="flex gap-10 ">
-        <div className="flex flex-col gap-10">
-          <FinancialMetricsCard />
-          <BehavioralMetricsCard />
-          <SectorBreakdownChart/>
+    <div className="relative h-[calc(100%-40px)] p-0 my-4 overflow-hidden">
+      {/* Top fade overlay */}
+      <div
+        className={`pointer-events-none absolute top-0 left-0 w-full h-6 bg-gradient-to-b from-[var(--color-background)] to-transparent z-10 transition-opacity duration-300 ${
+          showTopFade ? "opacity-100" : "opacity-0"
+        }`}
+      />
 
-        </div>
-        <div className="flex flex-col gap-10">
-          <PerformanceInsightsCard />
-          <TimeSummaryCard />
+      {/* Bottom fade overlay */}
+      <div
+        className={`pointer-events-none absolute bottom-0 left-0 w-full h-6 bg-gradient-to-t from-[var(--color-background)] to-transparent z-10 transition-opacity duration-300 ${
+          showBottomFade ? "opacity-100" : "opacity-0"
+        }`}
+      />
 
+      {/* Scrollable content */}
+      <div ref={scrollRef} className="overflow-y-auto h-full px-6">
+        <div className="flex gap-4 w-full">
+          <div className="flex flex-col gap-10 w-1/2">
+            <FinancialMetricsCard />
+            <BehavioralMetricsCard />
+            <SectorBreakdownChart />
+          </div>
+          <div className="flex flex-col gap-10 w-1/2">
+            <PerformanceInsightsCard />
+            <TimeSummaryCard />
+            <NotesCard/>
+          </div>
         </div>
       </div>
     </div>

@@ -20,19 +20,19 @@ const TimeSummaryCard = () => {
 
   const timeFields = useMemo(() => [
     {
-      label: "Trades",
+      label: "Number of Trades",
       value: selectedSummary.trades.toString(),
-      info: `Total trades made in the past ${selectedTimeframe}`
+      info: `Total number of trades made in the past ${selectedTimeframe}`
     },
     {
-      label: "Total Invested",
+      label: "Total Money Invested",
       value: selectedSummary.invested,
       info: `Cumulative investments made in the past ${selectedTimeframe}`
     },
     {
-      label: "Realized Gains",
+      label: "Realized Gain/Loss",
       value: selectedSummary.gains,
-      info: `Locked-in profit during the past ${selectedTimeframe}`
+      info: `Locked-in profit or loss during the past ${selectedTimeframe}`
     }
   ], [selectedTimeframe]);
 

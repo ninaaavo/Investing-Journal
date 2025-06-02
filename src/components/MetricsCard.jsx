@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Pencil } from "lucide-react";
+import AnimatedDropdown from "./AnimatedDropdown";
 import { motion } from "framer-motion";
 
 const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
@@ -84,7 +85,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
         layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] },
       }}
       layout
-      className="w-[300px] h-fit bg-white shadow-lg rounded-2xl p-6 flex flex-col space-y-4 transition-opacity duration-500"
+      className="h-fit bg-white shadow-lg rounded-2xl p-6 flex flex-col space-y-4"
     >
       <div>
         <div className="flex justify-between items-center mb-2">
@@ -116,52 +117,51 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                   animate: { opacity: 1, y: 0 },
                   transition: { duration: 0.3 },
                 })}
-                className="flex justify-between items-center border-b pb-2 relative"
+                className="border-b pb-2 relative"
               >
-                <div className="text-gray-600 text-sm flex items-center gap-1">
-                  <div className="text-gray-600 text-sm flex items-start gap-1 w-fit leading-tight">
+                <div className="flex justify-between gap-1 items-center text-sm text-gray-600 w-full">
+                  <div className="flex items-center gap-2 max-w-1/2 ">
                     {field.label.includes("(") ? (
                       <div className="flex flex-col">
-                        {field.label.split("(")[0].trim()}{" "}
+                        {field.label.split("(")[0].trim()}
                         <span className="text-xs italic">
                           ({field.label.split("(")[1]}
                         </span>
                       </div>
                     ) : (
-                      field.label
+                      <span>{field.label}</span>
                     )}
+                    {field.info && (
+                      <div className="relative group self-start">
+                        <div className="w-3 h-3 flex items-center justify-center border border-gray-400 rounded-full text-[7px] text-gray-500 cursor-help">
+                          i
+                        </div>
+                        <div className="absolute bg-black text-white text-xs rounded px-2 py-1 left-1/2 transform -translate-x-1/2 mt-2 w-48 z-10 hidden group-hover:block">
+                          {field.info}
+                        </div>
+                      </div>
+                    )}
+                    {field.type === "dropdown" &&
+                      field.selected !== undefined &&
+                      field.onChange && (
+                        <AnimatedDropdown
+                          options={field.options}
+                          selected={field.selected}
+                          onChange={field.onChange}
+                        />
+                      )}
                   </div>
-                  {field.info && (
-                    <div className="relative group self-start ">
-                      <div className="w-3 h-3 flex items-center justify-center border border-gray-400 rounded-full text-[7px] text-gray-500 cursor-help">
-                        i
-                      </div>
-                      <div className="absolute bg-black text-white text-xs rounded px-2 py-1 left-1/2 transform -translate-x-1/2 mt-2 w-48 z-10 hidden group-hover:block">
-                        {field.info}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <motion.div
-                  key={field.label + field.value}
-                  layout
-                  className="flex items-center gap-2"
-                >
-                  {field.type === "dropdown" &&
-                  field.selected !== undefined &&
-                  field.onChange ? (
-                    <>
-                      <select
-                        className="text-sm bg-gray-100 px-1 py-0.5 rounded"
-                        value={field.selected}
-                        onChange={(e) => field.onChange?.(e.target.value)}
+                  <div className="flex items-center gap-2">
+                    {field.type !== "dropdown" && !field.editable && (
+                      <span
+                        className={`font-medium text-sm text-right ${getValueColorClass(
+                          field.value
+                        )}`}
                       >
-                        {field.options.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
+                        {field.value}
+                      </span>
+                    )}
+                    {field.baseValue && (
                       <span
                         className={`font-medium text-sm text-right ${getValueColorClass(
                           field.baseValue
@@ -169,47 +169,37 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                       >
                         {field.baseValue}
                       </span>
-                    </>
-                  ) : field.editable ? (
-                    editingField === field.label ? (
-                      <form
-                        onSubmit={(e) => handleEditSubmit(e, field.label)}
-                        className="flex items-center gap-2"
-                      >
-                        <input
-                          name="editInput"
-                          type="number"
-                          defaultValue={editableValues[field.label]}
-                          className="w-20 px-1 py-0.5 border border-gray-300 rounded text-sm"
-                        />
-                        <button className="text-blue-600 text-sm">Save</button>
-                      </form>
-                    ) : (
-                      <>
-                        <span
-                          className={`font-medium text-sm ${getValueColorClass(
-                            `$${editableValues[field.label]?.toLocaleString()}`
-                          )}`}
+                    )}
+                    {field.editable &&
+                      (editingField === field.label ? (
+                        <form
+                          onSubmit={(e) => handleEditSubmit(e, field.label)}
+                          className="flex items-center gap-2"
                         >
-                          ${editableValues[field.label]?.toLocaleString()}
-                        </span>
-                        <Pencil
-                          size={16}
-                          className="text-gray-500 cursor-pointer"
-                          onClick={() => setEditingField(field.label)}
-                        />
-                      </>
-                    )
-                  ) : (
-                    <span
-                      className={`font-medium text-sm text-right ${getValueColorClass(
-                        field.value
-                      )}`}
-                    >
-                      {field.value}
-                    </span>
-                  )}
-                </motion.div>
+                          <input
+                            name="editInput"
+                            type="number"
+                            defaultValue={editableValues[field.label]}
+                            className="w-20 px-1 py-0.5 border border-gray-300 rounded text-sm"
+                          />
+                          <button className="text-blue-600 text-sm">
+                            Save
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className={`font-medium text-sm`}>
+                            ${editableValues[field.label]?.toLocaleString()}
+                          </span>
+                          <Pencil
+                            size={16}
+                            className="text-gray-500 cursor-pointer"
+                            onClick={() => setEditingField(field.label)}
+                          />
+                        </>
+                      ))}
+                  </div>
+                </div>
               </motion.div>
             ))
           : fields.map((field, index) => (

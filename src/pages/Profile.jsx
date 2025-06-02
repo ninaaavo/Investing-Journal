@@ -40,7 +40,6 @@ export default function Profile() {
   return (
     <motion.div
       key="profile"
-      
       className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] bg-[var(--color-background)] p-6 rounded-xl shadow-xl text-[var(--color-text)]"
     >
       <h1 className="text-3xl font-bold mb-4">
@@ -48,7 +47,8 @@ export default function Profile() {
       </h1>
 
       <p className="mb-6 text-center text-sm opacity-80">
-        Welcome to your profile dashboard. You can manage your account or continue investing.
+        Welcome to your profile dashboard. You can manage your account or
+        continue investing. To do here: manage journal fields :D
       </p>
 
       <button
@@ -60,4 +60,3 @@ export default function Profile() {
     </motion.div>
   );
 }
-  

@@ -1,8 +1,14 @@
 import JournalFilter from "./JournalFilter";
 
-export default function JournalSidebar({ entries, selected, onSelect, filters, onFilterChange }) {
+export default function JournalSidebar({
+  entries,
+  selected,
+  onSelect,
+  filters,
+  onFilterChange,
+}) {
   return (
-    <div className="w-1/3 max-w-xs bg-[var(--color-nav-background)] overflow-y-auto p-4">
+    <div className="w-[45%]  bg-[var(--color-nav-background)] overflow-y-auto p-4">
       <h2 className="text-xl font-semibold text-text mb-4">Journal</h2>
 
       <JournalFilter filters={filters} onChange={onFilterChange} />
@@ -10,9 +16,11 @@ export default function JournalSidebar({ entries, selected, onSelect, filters, o
       <ul className="space-y-2">
         {entries.map((entry) => (
           <li
-            key={entries.id}
-            className={`bg-white px-4 py-2 rounded-lg cursor-pointer flex justify-between items-center shadow-sm transition hover:bg-gray-100 ${
-              selected.id === entry.id ? "bg-[var(--color-dark-background)]!" : ""
+            key={entry.id}
+            className={`bg-white px-4 py-2 rounded-lg cursor-pointer flex justify-between items-center shadow-sm transform transition-transform duration-200 hover:scale-[103%] active:scale-[97%] hover:bg-gray-100 ${
+              selected.id === entry.id
+                ? "!bg-[var(--color-dark-background)]"
+                : ""
             }`}
             onClick={() => onSelect(entry)}
           >
