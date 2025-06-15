@@ -7,12 +7,13 @@ const FinancialMetricCard = () => {
   const [timeRange, setTimeRange] = useState("1D");
   const [dividendRange, setDividendRange] = useState("YTD");
   const [cash, setCash] = useState(1250);
+
   const ref = useRef();
-  const setFinancialRef = useFinancialRef(true); // flag for setter
+  const setFinancialRef = useFinancialRef(true);
+
   useEffect(() => {
     setFinancialRef(ref);
   }, [setFinancialRef]);
-
   const plValues = {
     "1D": "+$320 (3.2%)",
     "1W": "+$780 (7.1%)",
@@ -82,9 +83,7 @@ const FinancialMetricCard = () => {
 
   return (
     <div ref={ref}>
-      <motion.div layout>
-        <MetricsCard title="Financial Metrics" fields={financialFields} />
-      </motion.div>
+      <MetricsCard title="Financial Metrics" fields={financialFields} />
     </div>
   );
 };

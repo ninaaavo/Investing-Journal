@@ -1,15 +1,24 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
 import MetricsCard from "./MetricsCard";
-import { motion } from "framer-motion";
-import { useTrackYShift } from "../hooks/useTrackYShift"; // adjust the path
-import { useFinancialRef } from "../sharedRefs.jsx";
+import { useTrackYShift } from "../hooks/useTrackYShift";
+import { useFinancialRef, useBehavioralRef } from "../sharedRefs.jsx";
 
 const BehavioralMetricsCard = () => {
   const ref = useRef();
-  const financialRef = useFinancialRef(); // access the ref of FinancialMetricsCard
+
+  // Track ref change to animate based on FinancialMetricsCard's layout
+  const financialRef = useFinancialRef();
+
+  // Register this card's own ref to the shared BehavioralRef context
+  const setBehavioralRef = useBehavioralRef(true);
+  useEffect(() => {
+    setBehavioralRef(ref);
+  }, [setBehavioralRef]);
+
+  // Animate when Financial shifts
   useTrackYShift(ref, financialRef);
 
-  // Example placeholder values
+  // Placeholder metrics
   const journalEntryCount = 27;
   const avgConfidenceRating = "3.8 / 5";
   const mostCommonMistake = "Selling too early";
@@ -43,7 +52,6 @@ const BehavioralMetricsCard = () => {
 
   return (
     <div ref={ref}>
-      {/* <div style={{ transition: "transform 200ms ease" }}> */}
       <MetricsCard
         title="Behavioral & Reflection Metrics"
         fields={behavioralFields}

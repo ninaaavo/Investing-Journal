@@ -55,9 +55,11 @@ export default function OverviewCard() {
             </FinancialRefProvider>
           </div>
           <div className="flex flex-col gap-10 w-1/2">
-            <PerformanceInsightsCard />
-            <TimeSummaryCard />
-            <NotesCard />
+            <FinancialRefProvider>
+              <PerformanceInsightsCard />
+              <TimeSummaryCard />
+              <NotesCard />
+            </FinancialRefProvider>
           </div>
         </div>
       </div>
