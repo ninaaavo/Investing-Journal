@@ -43,6 +43,7 @@ const BehavioralMetricsCard = () => {
 
   return (
     <div ref={ref}>
+      {/* <div style={{ transition: "transform 200ms ease" }}> */}
       <MetricsCard
         title="Behavioral & Reflection Metrics"
         fields={behavioralFields}

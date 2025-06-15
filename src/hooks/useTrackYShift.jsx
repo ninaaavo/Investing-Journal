@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 export const useTrackYShift = (ref, watchRef) => {
   const prevY = useRef(0);
+  const hasMounted = useRef(false);
 
   useEffect(() => {
     if (!ref.current || !watchRef.current) return;
@@ -10,7 +11,7 @@ export const useTrackYShift = (ref, watchRef) => {
       const newY = ref.current.getBoundingClientRect().top;
       const deltaY = prevY.current - newY;
 
-      if (Math.abs(deltaY) > 1) {
+      if (hasMounted.current && Math.abs(deltaY) > 1) {
         ref.current.style.transition = "none";
         ref.current.style.transform = `translateY(${deltaY}px)`;
 
@@ -23,6 +24,7 @@ export const useTrackYShift = (ref, watchRef) => {
       }
 
       prevY.current = newY;
+      hasMounted.current = true;
     };
 
     const resizeObserver = new ResizeObserver(() => {
