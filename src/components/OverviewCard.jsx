@@ -5,6 +5,8 @@ import BehavioralMetricsCard from "./BehavioralMetricCard";
 import TimeSummaryCard from "./TimeSummaryCard";
 import SectorBreakdownChart from "./SectorBreakdownChart";
 import NotesCard from "./NotesCard";
+import { motion } from "framer-motion";
+import { FinancialRefProvider } from "../sharedRefs.jsx";
 
 export default function OverviewCard() {
   const scrollRef = useRef(null);
@@ -46,14 +48,16 @@ export default function OverviewCard() {
       <div ref={scrollRef} className="overflow-y-auto h-full px-6">
         <div className="flex gap-4 w-full">
           <div className="flex flex-col gap-10 w-1/2">
-            <FinancialMetricsCard />
-            <BehavioralMetricsCard />
-            <SectorBreakdownChart />
+            <FinancialRefProvider>
+              <FinancialMetricsCard />
+              <BehavioralMetricsCard />
+              <SectorBreakdownChart />
+            </FinancialRefProvider>
           </div>
           <div className="flex flex-col gap-10 w-1/2">
             <PerformanceInsightsCard />
             <TimeSummaryCard />
-            <NotesCard/>
+            <NotesCard />
           </div>
         </div>
       </div>

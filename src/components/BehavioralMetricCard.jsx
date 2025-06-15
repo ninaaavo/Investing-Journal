@@ -1,9 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import MetricsCard from "./MetricsCard";
 import { motion } from "framer-motion";
-    
+import { useTrackYShift } from "../hooks/useTrackYShift"; // adjust the path
+import { useFinancialRef } from "../sharedRefs.jsx";
 
 const BehavioralMetricsCard = () => {
+  const ref = useRef();
+  const financialRef = useFinancialRef(); // access the ref of FinancialMetricsCard
+  useTrackYShift(ref, financialRef);
+
   // Example placeholder values
   const journalEntryCount = 27;
   const avgConfidenceRating = "3.8 / 5";
@@ -37,15 +42,12 @@ const BehavioralMetricsCard = () => {
   );
 
   return (
-    <motion.div
-      layout
-      transition={{ layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] } }}
-    >
+    <div ref={ref}>
       <MetricsCard
         title="Behavioral & Reflection Metrics"
         fields={behavioralFields}
       />
-    </motion.div>
+    </div>
   );
 };
 
