@@ -1,7 +1,8 @@
 import { motion } from "framer-motion";
 import StockCard from "../components/StockCard";
 import AddStockSmall from "../components/AddStockSmall";
-import OverviewCard from "../components/OverviewCard";
+import OverviewCard from "../components/OverviewCard/OverviewCard";
+import InputForm from "../components/InputForm";
 
 export default function Positions() {
   return (
@@ -25,7 +26,7 @@ export default function Positions() {
 
           {/* Scrollable content */}
           <div className="overflow-y-auto h-full pr-2">
-            <div className="flex flex-wrap gap-6 pt-4 pb-6 px-6 w-full">
+            <div className="flex flex-wrap justify-between pt-4 pb-6 px-6 w-full">
               <StockCard />
               <StockCard />
               <StockCard />
@@ -34,9 +35,13 @@ export default function Positions() {
           </div>
         </div>
       </div>
-      <div className="w-[calc((100%-40px)/2)]">
+      {/* <div className="w-[calc((100%-40px)/2)]">
         <div className="text-lg font-medium">Overview</div>
         <OverviewCard />
+      </div> */}
+      <div className="w-[calc((100%-40px)/2)]">
+        <div className="text-lg font-medium">Form</div>
+        <InputForm />
       </div>
     </motion.div>
   );

@@ -89,7 +89,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
     >
       <div>
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mr-2">{title}</h2>
           <button
             className="text-sm text-blue-600 hover:underline w-max shrink-0 self-start mt-[7px]"
             onClick={toggleEditingMetrics}

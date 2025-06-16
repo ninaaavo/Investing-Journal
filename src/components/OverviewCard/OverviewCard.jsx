@@ -1,12 +1,12 @@
 import { useRef, useState, useEffect } from "react";
-import FinancialMetricsCard from "./FinancialMetricCard";
-import PerformanceInsightsCard from "./PerformanceInsightCard";
-import BehavioralMetricsCard from "./BehavioralMetricCard";
-import TimeSummaryCard from "./TimeSummaryCard";
-import SectorBreakdownChart from "./SectorBreakdownChart";
-import NotesCard from "./NotesCard";
+import FinancialMetricsCard from "./FinancialMetricCard.jsx";
+import PerformanceInsightsCard from "./PerformanceInsightCard.jsx";
+import BehavioralMetricsCard from "./BehavioralMetricCard.jsx";
+import TimeSummaryCard from "./TimeSummaryCard.jsx";
+import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
+import NotesCard from "./NotesCard.jsx";
 import { motion } from "framer-motion";
-import { FinancialRefProvider } from "../sharedRefs.jsx";
+import { FinancialRefProvider } from "../../sharedRefs.jsx";
 
 export default function OverviewCard() {
   const scrollRef = useRef(null);
