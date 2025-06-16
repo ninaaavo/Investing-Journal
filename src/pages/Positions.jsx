@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import StockCard from "../components/StockCard";
-import AddStockSmall from "../components/AddStockSmall";
-import OverviewCard from "../components/OverviewCard/OverviewCard";
-import InputForm from "../components/InputForm";
+import StockCard from "../components/PositionComponents/StockCard";
+import AddStockSmall from "../components/PositionComponents/AddStockSmall";
+import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
+import InputForm from "../components/PositionComponents/InputForm";
 
 export default function Positions() {
   return (

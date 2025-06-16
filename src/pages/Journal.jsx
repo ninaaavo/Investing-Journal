@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
-import JournalSidebar from "../components/JournalSideBar";
-import JournalDetail from "../components/JournalDetail";
+import JournalSidebar from "../components/JournalComponents/JournalSidebar";
+import JournalDetail from "../components/JournalComponents/JournalDetail";
 
 const mockEntries = [
   {

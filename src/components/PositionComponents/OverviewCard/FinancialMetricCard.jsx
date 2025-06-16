@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import MetricsCard from "./MetricsCard.jsx";
-import { useFinancialRef } from "../../sharedRefs.jsx";
+import { useFinancialRef } from "../../../sharedRefs.jsx";
 
 const FinancialMetricCard = () => {
   const [timeRange, setTimeRange] = useState("1D");

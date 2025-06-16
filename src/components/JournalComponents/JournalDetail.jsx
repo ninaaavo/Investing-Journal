@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import BuyJournalSummary from "../components/BuyJournalSummary";
-import CheckCard from "../components/CheckCard";
+import BuyJournalSummary from "./BuyJournalSummary";
+import CheckCard from "./CheckCard";
 
 export default function JournalDetail({ selected }) {
   return (

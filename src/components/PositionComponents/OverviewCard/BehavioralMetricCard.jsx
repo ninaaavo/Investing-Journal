@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useEffect } from "react";
-import MetricsCard from "./MetricsCard";
-import { useTrackYShift } from "../../hooks/useTrackYShift";
-import { useFinancialRef, useBehavioralRef } from "../../sharedRefs.jsx";
+import MetricsCard from "./MetricsCard.jsx";
+import { useTrackYShift } from "../../../hooks/useTrackYShift.jsx";
+import { useFinancialRef, useBehavioralRef } from "../../../sharedRefs.jsx";
 
 const BehavioralMetricsCard = () => {
   const ref = useRef();

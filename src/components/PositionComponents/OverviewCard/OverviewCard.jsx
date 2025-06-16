@@ -6,7 +6,7 @@ import TimeSummaryCard from "./TimeSummaryCard.jsx";
 import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
 import NotesCard from "./NotesCard.jsx";
 import { motion } from "framer-motion";
-import { FinancialRefProvider } from "../../sharedRefs.jsx";
+import { FinancialRefProvider } from "../../../sharedRefs.jsx";
 
 export default function OverviewCard() {
   const scrollRef = useRef(null);
