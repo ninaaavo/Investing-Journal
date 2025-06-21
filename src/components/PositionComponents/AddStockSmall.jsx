@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
-export default function AddStockSmall() {
+export default function AddStockSmall({ setShowForm, setPrefillData }) {
   const [form, setForm] = useState({
     name: "",
     shares: "",
@@ -15,7 +15,12 @@ export default function AddStockSmall() {
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log("Stock Added:", form);
-    // reset
+    setPrefillData({
+      ticker: form.name,
+      shares: form.shares,
+      entryPrice: form.price,
+    });
+    setShowForm(true);
     setForm({ name: "", shares: "", price: "" });
   };
 
@@ -46,7 +51,7 @@ export default function AddStockSmall() {
               value={form.name}
               onChange={handleChange}
               placeholder="e.g. AAPL"
-              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-text)] focus:shadow-[0_0_6px_4px_rgba(0,0,0,0.1)]"
               required
             />
           </div>
@@ -58,7 +63,7 @@ export default function AddStockSmall() {
               value={form.shares}
               onChange={handleChange}
               placeholder="e.g. 10"
-              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-text)] focus:shadow-[0_0_6px_4px_rgba(0,0,0,0.1)]"
               required
             />
           </div>
@@ -71,7 +76,7 @@ export default function AddStockSmall() {
               value={form.price}
               onChange={handleChange}
               placeholder="e.g. 175"
-              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-text)] focus:shadow-[0_0_6px_4px_rgba(0,0,0,0.1)]"
               required
             />
           </div>

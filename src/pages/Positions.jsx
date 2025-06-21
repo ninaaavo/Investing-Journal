@@ -1,10 +1,14 @@
 import { motion } from "framer-motion";
+import { useState } from "react";
 import StockCard from "../components/PositionComponents/StockCard";
 import AddStockSmall from "../components/PositionComponents/AddStockSmall";
 import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
 import InputForm from "../components/PositionComponents/InputForm";
 
 export default function Positions() {
+  const [showForm, setShowForm] = useState(true);
+  const [prefillData, setPrefillData] = useState(null); // NEW
+
   return (
     <motion.div
       key="positions"
@@ -13,7 +17,10 @@ export default function Positions() {
       <div className="flex flex-col w-[calc((100%-40px)/2)]">
         <div>
           <div className="text-lg font-medium ">Add stock</div>
-          <AddStockSmall />
+          <AddStockSmall
+            setShowForm={setShowForm}
+            setPrefillData={setPrefillData}
+          />
         </div>
         <div className="text-lg font-medium">Current Stocks</div>
 
@@ -35,13 +42,20 @@ export default function Positions() {
           </div>
         </div>
       </div>
-      {/* <div className="w-[calc((100%-40px)/2)]">
-        <div className="text-lg font-medium">Overview</div>
-        <OverviewCard />
-      </div> */}
       <div className="w-[calc((100%-40px)/2)]">
-        <div className="text-lg font-medium">Form</div>
-        <InputForm />
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-lg font-medium">
+            {showForm ? "Form" : "Overview"}
+          </div>
+          <button
+            onClick={() => setShowForm((prev) => !prev)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            {showForm ? "Switch to Overview" : "Switch to Form"}
+          </button>
+        </div>
+
+        {showForm ? <InputForm setShowForm={setShowForm} /> : <OverviewCard />}
       </div>
     </motion.div>
   );
