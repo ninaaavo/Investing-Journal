@@ -7,7 +7,7 @@ export default function ReasonCheckList({ checklist, setChecklist }) {
   const [newItem, setNewItem] = useState("");
   const checklistItems = Object.keys(checklist);
   const [editingWeights, setEditingWeights] = useState({});
-  const hasMounted = useRef(false);
+  const hasMounted = useRef(true);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -54,9 +54,9 @@ export default function ReasonCheckList({ checklist, setChecklist }) {
 
   const animationProps = hasMounted.current
     ? {
-        initial: { opacity: 0, y: 20 },
+        initial: { opacity: 0, y: -20 },
         animate: { opacity: 1, y: 0 },
-        exit: { opacity: 0, y: 20 },
+        exit: { opacity: 0, y: -20 },
         transition: { duration: 0.3 },
       }
     : {};

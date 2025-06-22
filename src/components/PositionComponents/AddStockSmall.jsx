@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "react-toastify";
 
 export default function AddStockSmall({ setShowForm, setPrefillData }) {
   const [form, setForm] = useState({
@@ -20,7 +21,10 @@ export default function AddStockSmall({ setShowForm, setPrefillData }) {
       shares: form.shares,
       entryPrice: form.price,
     });
-    setShowForm(true);
+    setShowForm(true); // triggers the form to show
+
+    toast.info("Stock added! Now complete the journal entry on the right →");
+
     setForm({ name: "", shares: "", price: "" });
   };
 
