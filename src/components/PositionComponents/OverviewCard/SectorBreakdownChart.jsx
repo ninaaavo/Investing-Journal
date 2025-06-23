@@ -14,12 +14,7 @@ import { useTrackYShift } from "../../../hooks/useTrackYShift.jsx";
 import { useFinancialRef, useBehavioralRef } from "../../../sharedRefs.jsx";
 
 const SectorBreakdownChart = () => {
-  const ref = useRef();
 
-  const financialRef = useFinancialRef();
-  const behavioralRef = useBehavioralRef();
-
-  useTrackYShift(ref, [financialRef, behavioralRef]);
 
   const data = [
     { name: "Technology", value: 40 },
@@ -90,7 +85,6 @@ const SectorBreakdownChart = () => {
 
   return (
     <div
-      ref={ref}
       className="w-full h-[350px] bg-white rounded-xl shadow-md p-4"
     >
       <h2 className="text-lg font-semibold text-gray-800 mb-2">

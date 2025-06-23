@@ -46,22 +46,16 @@ export default function OverviewCard() {
 
       {/* Scrollable content */}
       <div ref={scrollRef} className="overflow-y-auto h-full px-6">
-        <div className="flex gap-4 w-full">
-          <div className="flex flex-col gap-10 w-1/2">
-            <FinancialRefProvider>
-              <FinancialMetricsCard />
-              <BehavioralMetricsCard />
-              <SectorBreakdownChart />
-            </FinancialRefProvider>
-          </div>
-          <div className="flex flex-col gap-10 w-1/2">
-            <FinancialRefProvider>
-              <PerformanceInsightsCard />
-              <TimeSummaryCard />
-              <NotesCard />
-            </FinancialRefProvider>
-          </div>
-        </div>
+          <div className="columns-2 gap-4">
+  <div className="break-inside-avoid mb-4"><FinancialMetricsCard /></div>
+  <div className="break-inside-avoid mb-4"><BehavioralMetricsCard /></div>
+  <div className="break-inside-avoid mb-4"><SectorBreakdownChart /></div>
+  <div className="break-inside-avoid mb-4"><PerformanceInsightsCard /></div>
+  <div className="break-inside-avoid mb-4"><TimeSummaryCard /></div>
+  <div className="break-inside-avoid mb-4"><NotesCard /></div>
+</div>
+
+
       </div>
     </div>
   );

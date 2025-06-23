@@ -4,19 +4,7 @@ import { useTrackYShift } from "../../../hooks/useTrackYShift.jsx";
 import { useFinancialRef, useBehavioralRef } from "../../../sharedRefs.jsx";
 
 const BehavioralMetricsCard = () => {
-  const ref = useRef();
 
-  // Track ref change to animate based on FinancialMetricsCard's layout
-  const financialRef = useFinancialRef();
-
-  // Register this card's own ref to the shared BehavioralRef context
-  const setBehavioralRef = useBehavioralRef(true);
-  useEffect(() => {
-    setBehavioralRef(ref);
-  }, [setBehavioralRef]);
-
-  // Animate when Financial shifts
-  useTrackYShift(ref, financialRef);
 
   // Placeholder metrics
   const journalEntryCount = 27;
@@ -51,7 +39,7 @@ const BehavioralMetricsCard = () => {
   );
 
   return (
-    <div ref={ref}>
+    <div>
       <MetricsCard
         title="Behavioral & Reflection Metrics"
         fields={behavioralFields}

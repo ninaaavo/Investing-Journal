@@ -8,12 +8,6 @@ const FinancialMetricCard = () => {
   const [dividendRange, setDividendRange] = useState("YTD");
   const [cash, setCash] = useState(1250);
 
-  const ref = useRef();
-  const setFinancialRef = useFinancialRef(true);
-
-  useEffect(() => {
-    setFinancialRef(ref);
-  }, [setFinancialRef]);
   const plValues = {
     "1D": "+$320 (3.2%)",
     "1W": "+$780 (7.1%)",
@@ -82,9 +76,7 @@ const FinancialMetricCard = () => {
   );
 
   return (
-    <div ref={ref}>
       <MetricsCard title="Financial Metrics" fields={financialFields} />
-    </div>
   );
 };
 
