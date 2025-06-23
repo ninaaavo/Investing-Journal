@@ -22,7 +22,6 @@ import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
 import PerformanceInsightsCard from "./PerformanceInsightCard.jsx";
 import TimeSummaryCard from "./TimeSummaryCard.jsx";
 import NotesCard from "./NotesCard.jsx";
-import { FinancialRefProvider } from "../../../sharedRefs.jsx";
 
 const componentMap = {
   FinancialMetricsCard,
@@ -205,9 +204,7 @@ function SortableCard({ id, isEditing }) {
       }`}
     >
       <div className={isEditing ? "pointer-events-none" : ""}>
-        <FinancialRefProvider>
           <Component />
-        </FinancialRefProvider>
       </div>
     </motion.div>
   );

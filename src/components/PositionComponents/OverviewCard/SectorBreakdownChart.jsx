@@ -10,8 +10,6 @@ import {
   LabelList,
   Cell,
 } from "recharts";
-import { useTrackYShift } from "../../../hooks/useTrackYShift.jsx";
-import { useFinancialRef, useBehavioralRef } from "../../../sharedRefs.jsx";
 
 const SectorBreakdownChart = () => {
 
