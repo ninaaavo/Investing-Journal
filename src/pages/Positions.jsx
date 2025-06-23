@@ -6,6 +6,7 @@ import OverviewCard from "../components/PositionComponents/OverviewCard/Overview
 import InputForm from "../components/PositionComponents/InputForm";
 
 export default function Positions() {
+  const [isEditingLayout, setIsEditingLayout] = useState(false);
   return (
     <motion.div
       key="positions"
@@ -39,8 +40,14 @@ export default function Positions() {
       <div className="w-[calc((100%-40px)/2)]">
         <div className="flex items-center justify-between mb-4">
           <div className="text-lg font-medium"> Overview</div>
+          <button
+          onClick={() =>{setIsEditingLayout((prev) => !prev);console.log("your editing layout now is", isEditingLayout);} }
+          className="text-sm font-semibold px-3 py-1 rounded-md bg-[var(--color-primary)] text-white shadow hover:opacity-80"
+        >
+          {isEditingLayout ? "Done" : "Edit Layout"}
+        </button>
         </div>
-        <OverviewCard />
+        <OverviewCard isEditingLayout ={isEditingLayout}/>
       </div>
     </motion.div>
   );
