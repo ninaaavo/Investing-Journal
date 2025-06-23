@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import StockCard from "../components/PositionComponents/StockCard";
-import AddStockSmall from "../components/PositionComponents/AddStockSmall";
 import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
 import InputForm from "../components/PositionComponents/InputForm";
 
