@@ -7,14 +7,16 @@ export default function InputForm() {
     "Graph pattern",
     "Candle pattern",
     "Key level",
+    "EMA50",
+    "RSI",
   ];
 
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
 
   useEffect(() => {
-  setFadeKey((prev) => prev + 1);
-}, [showExpandedForm]);
+    setFadeKey((prev) => prev + 1);
+  }, [showExpandedForm]);
 
   const [form, setForm] = useState({
     ticker: "",
@@ -29,8 +31,6 @@ export default function InputForm() {
     strategyFit: "",
     mood: "",
     confidence: "",
-    influencedByFomo: "",
-    stressFactors: "",
     tags: "",
     journalType: "buy",
     checklist: initialChecklistItems.reduce((acc, item) => {
@@ -65,8 +65,6 @@ export default function InputForm() {
       strategyFit: "",
       mood: "",
       confidence: "",
-      influencedByFomo: "",
-      stressFactors: "",
       tags: "",
       journalType: "buy",
       checklist: initialChecklistItems.reduce((acc, item) => {
@@ -99,10 +97,27 @@ export default function InputForm() {
             e.preventDefault();
           }
         }}
-        className={`p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-full space-y-4 overflow-y-auto ${
+        className={`relative p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-full space-y-4 overflow-y-auto ${
           showExpandedForm ? "h-[70vh]" : ""
         }`}
       >
+        {/* ❌ Close button */}
+        {showExpandedForm && (
+          <motion.button
+            type="button"
+            onClick={() => setShowExpandedForm(false)}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            whileHover={{ rotate: 90, scale: 1.2 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="absolute top-2 right-4 z-50 text-gray-500 hover:text-gray-800 text-2xl font-bold leading-none"
+            aria-label="Close"
+          >
+            ×
+          </motion.button>
+        )}
+
         {!showExpandedForm && (
           <div className="flex gap-4">
             <div className="flex flex-col gap-2 w-1/4">
@@ -169,7 +184,6 @@ export default function InputForm() {
                 { label: "Ticker Name", name: "ticker", type: "text" },
                 { label: "Number of Shares", name: "shares", type: "number" },
                 { label: "Entry Price", name: "price", type: "number" },
-
                 { label: "Entry Date", name: "entryDate", type: "date" },
                 {
                   label: "Stop Loss (optional)",
@@ -184,7 +198,7 @@ export default function InputForm() {
                   placeholder: "e.g. 150",
                 },
               ].map((field) => (
-                <label key={field.name} className="">
+                <label key={field.name}>
                   <span className="block mb-1 font-medium">{field.label}</span>
                   <input
                     type={field.type}
@@ -207,7 +221,8 @@ export default function InputForm() {
               {
                 label: "Why are you entering this trade?",
                 name: "reason",
-                placeholder: "e.g. Breakout above resistance on high volume",
+                placeholder:
+                  "e.g. Breakout above resistance on high volume",
               },
               {
                 label: "What do you expect to happen?",
@@ -313,7 +328,8 @@ export default function InputForm() {
                 />
               </label>
             </div>
-<motion.button
+
+            <motion.button
               type="submit"
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
