@@ -1,8 +1,47 @@
 import { motion } from "framer-motion";
 import BuyJournalSummary from "./BuyJournalSummary";
 import CheckCard from "./CheckCard";
+import ReasonJournalCard from "./ReasonJournalCard";
 
 export default function JournalDetail({ selected }) {
+  const checklist = {
+    "Graph pattern": {
+      value: "positive",
+      comment: "Double bottoms near support zone",
+      weight: 4,
+    },
+    "Candle pattern": {
+      value: "positive",
+      comment: "3 white soldiers after consolidation",
+      weight: 2,
+    },
+    "Key level": {
+      value: "negative",
+      comment: "Resistance zone around 125",
+      weight: 1,
+    },
+    EMA50: {
+      value: "neutral",
+      comment: "Price hovering slightly above",
+      weight: 1,
+    },
+    RSI: {
+      value: "neutral",
+      comment: "Near 50 — no clear signal",
+      weight: 1,
+    },
+    "Volume spike": {
+      value: "positive",
+      comment: "Unusual high volume on green candle",
+      weight: 3,
+    },
+    "News sentiment": {
+      value: "negative",
+      comment: "Market uncertainty due to earnings report",
+      weight: 2,
+    },
+  };
+
   return (
     <motion.div
       initial={{ x: 10, opacity: 0 }}
@@ -25,7 +64,8 @@ export default function JournalDetail({ selected }) {
           currentPrice={175}
           date={"12:05 pm - May 23, 2025"}
         />
-
+        <ReasonJournalCard checklist={checklist}   useWeightedScoring={true}
+ />
         <CheckCard
           title="Company Quality"
           criteria={[

@@ -67,9 +67,9 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
   );
 
   const getValueColorClass = (value) => {
-    if (typeof value !== "string") return "text-gray-900";
+    if (typeof value !== "string") return "";
     const match = value.match(/\(\s*([-+]?\d*\.?\d+)%?\s*\)/);
-    if (!match) return "text-gray-900";
+    if (!match) return "";
     const number = parseFloat(match[1]);
     return number < 0 ? "text-red-600" : "text-green-600";
   };
@@ -90,7 +90,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
     >
       <div>
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-semibold text-gray-800 mr-2">{title}</h2>
+          <h2 className="text-xl font-semibold mr-2">{title}</h2>
           <button
             className="text-sm text-blue-600 hover:underline w-max shrink-0 self-start mt-[7px]"
             onClick={toggleEditingMetrics}
@@ -120,7 +120,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                 })}
                 className="border-b pb-2 relative"
               >
-                <div className="flex justify-between gap-1 items-center text-sm text-gray-600 w-full">
+                <div className="flex justify-between gap-1 items-center text-sm w-full">
                   <div className="flex items-center gap-2 max-w-1/2 ">
                     {field.label.includes("(") ? (
                       <div className="flex flex-col">
@@ -134,7 +134,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                     )}
                     {field.info && (
                       <div className="relative group self-start">
-                        <div className="w-3 h-3 flex items-center justify-center border border-gray-400 rounded-full text-[7px] text-gray-500 cursor-help">
+                        <div className="w-3 h-3 flex items-center justify-center border border-gray-400 rounded-full text-[7px] cursor-help">
                           i
                         </div>
                         <div className="absolute bg-black text-white text-xs rounded px-2 py-1 left-1/2 transform -translate-x-1/2 mt-2 w-48 z-10 hidden group-hover:block">
@@ -194,7 +194,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                           </span>
                           <Pencil
                             size={16}
-                            className="text-gray-500 cursor-pointer"
+                            className=" cursor-pointer"
                             onClick={() => setEditingField(field.label)}
                           />
                         </>
@@ -212,7 +212,7 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                 transition={{ duration: 0.3 }}
                 className="flex justify-between items-center border-b pb-2"
               >
-                <span className="text-gray-600 text-sm">{field.label}</span>
+                <span className=" text-sm">{field.label}</span>
                 <input
                   type="checkbox"
                   checked={tempFields.some((f) => f.label === field.label)}

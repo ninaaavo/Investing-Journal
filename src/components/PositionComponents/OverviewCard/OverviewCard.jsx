@@ -149,12 +149,10 @@ export default function OverviewCard({ isEditingLayout }) {
           <DragOverlay>
             {activeId ? (
               <div className="rounded-xl shadow p-4 bg-white opacity-90">
-                <FinancialRefProvider>
                   {(() => {
                     const ActiveComponent = componentMap[activeId];
                     return <ActiveComponent />;
                   })()}
-                </FinancialRefProvider>
               </div>
             ) : null}
           </DragOverlay>

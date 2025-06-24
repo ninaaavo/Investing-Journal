@@ -1,6 +1,9 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import ReasonCheckList from "./ReasonCheckList";
+import ConfidenceSlider from "./ConfidenceSlider";
+import RiskRewardInput from "./RiskRewardInput";
+
 
 export default function InputForm() {
   const initialChecklistItems = [
@@ -30,9 +33,14 @@ export default function InputForm() {
     signals: "",
     strategyFit: "",
     mood: "",
-    confidence: "",
+    confidence: 5,
     tags: "",
     journalType: "buy",
+    direction: "long",
+    timeframe: "",
+    exitPlan: "",
+    riskReward: "",
+    rrMode: "targetPrice", // or "riskReward"
     checklist: initialChecklistItems.reduce((acc, item) => {
       acc[item] = { value: "neutral", comment: "" };
       return acc;
@@ -64,9 +72,14 @@ export default function InputForm() {
       signals: "",
       strategyFit: "",
       mood: "",
-      confidence: "",
+      confidence: 5,
       tags: "",
       journalType: "buy",
+      direction: "long",
+      timeframe: "",
+      exitPlan: "",
+      riskReward: "",
+      rrMode: "targetPrice", // or "riskReward"
       checklist: initialChecklistItems.reduce((acc, item) => {
         acc[item] = { value: "neutral", comment: "" };
         return acc;
@@ -120,48 +133,42 @@ export default function InputForm() {
 
         {!showExpandedForm && (
           <div className="flex gap-4">
-            <div className="flex flex-col gap-2 w-1/4">
-              <label>
-                <span className="block mb-1 font-medium">Ticker Name</span>
-                <input
-                  type="text"
-                  name="ticker"
-                  value={form.ticker}
-                  onChange={handleChange}
-                  placeholder="e.g. AAPL"
-                  className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
-                  required
-                />
-              </label>
-            </div>
-            <div className="flex flex-col gap-2 w-1/4">
-              <label>
-                <span className="block mb-1 font-medium">Number of Shares</span>
-                <input
-                  type="number"
-                  name="shares"
-                  value={form.shares}
-                  onChange={handleChange}
-                  placeholder="e.g. 10"
-                  className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
-                  required
-                />
-              </label>
-            </div>
-            <div className="flex flex-col gap-2 w-1/4">
-              <label>
-                <span className="block mb-1 font-medium">Entry Price</span>
-                <input
-                  type="number"
-                  name="entryPrice"
-                  value={form.entryPrice}
-                  onChange={handleChange}
-                  placeholder="e.g. 175"
-                  className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
-                  required
-                />
-              </label>
-            </div>
+            {[
+              {
+                label: "Ticker Name",
+                name: "ticker",
+                type: "text",
+                placeholder: "e.g. AAPL",
+              },
+              {
+                label: "Number of Shares",
+                name: "shares",
+                type: "number",
+                placeholder: "e.g. 10",
+              },
+              {
+                label: "Entry Price",
+                name: "entryPrice",
+                type: "number",
+                placeholder: "e.g. 175",
+              },
+            ].map((field) => (
+              <div key={field.name} className="flex flex-col gap-2 w-1/4">
+                <label>
+                  <span className="block mb-1 font-medium">{field.label}</span>
+                  <input
+                    type={field.type}
+                    name={field.name}
+                    value={form[field.name]}
+                    onChange={handleChange}
+                    placeholder={field.placeholder}
+                    className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
+                    required
+                  />
+                </label>
+              </div>
+            ))}
+
             <div className="flex flex-col gap-2 justify-end">
               <motion.button
                 type="submit"
@@ -179,86 +186,87 @@ export default function InputForm() {
 
         {showExpandedForm && (
           <>
-            <div className="grid grid-cols-3 grid-rows-2 gap-6">
+            {/* Basic Info */}
+            <div className="grid grid-cols-3 gap-6 auto-rows-auto">
               {[
                 { label: "Ticker Name", name: "ticker", type: "text" },
                 { label: "Number of Shares", name: "shares", type: "number" },
-                { label: "Entry Price", name: "price", type: "number" },
+                { label: "Entry Price", name: "entryPrice", type: "number" },
                 { label: "Entry Date", name: "entryDate", type: "date" },
                 {
-                  label: "Stop Loss (optional)",
-                  name: "stopLoss",
-                  type: "text",
-                  placeholder: "e.g. 120",
+                  label: "Trade Direction",
+                  name: "direction",
+                  type: "select",
+                  options: ["Long", "Short"],
                 },
                 {
-                  label: "Target Price (optional)",
-                  name: "targetPrice",
-                  type: "text",
-                  placeholder: "e.g. 150",
+                  label: "Timeframe",
+                  name: "timeframe",
+                  type: "select",
+                  options: [
+                    "Intraday",
+                    "Swing (1-10 days)",
+                    "Position (weeks-months)",
+                    "Long Term",
+                  ],
                 },
               ].map((field) => (
                 <label key={field.name}>
-                  <span className="block mb-1 font-medium">{field.label}</span>
-                  <input
-                    type={field.type}
-                    name={field.name}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                    placeholder={field.placeholder}
-                    className="w-full p-2 border rounded"
-                  />
+                  <span className="block font-medium">{field.label}</span>
+                  {field.type === "select" ? (
+                    <select
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      className="w-full p-2 border rounded"
+                    >
+                      <option value="">Select</option>
+                      {field.options.map((option) => (
+                        <option key={option} value={option.toLowerCase()}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={field.type}
+                      name={field.name}
+                      value={form[field.name]}
+                      onChange={handleChange}
+                      placeholder={field.placeholder}
+                      className="w-full p-2 border rounded"
+                    />
+                  )}
                 </label>
               ))}
-            </div>
-
-            <ReasonCheckList
-              checklist={form.checklist}
-              setChecklist={setChecklist}
-            />
-
-            {[
-              {
-                label: "Why are you entering this trade?",
-                name: "reason",
-                placeholder:
-                  "e.g. Breakout above resistance on high volume",
-              },
-              {
-                label: "What do you expect to happen?",
-                name: "expectations",
-                placeholder:
-                  "e.g. Price will retest previous high within 2–3 days",
-              },
-              {
-                label: "What signals or patterns?",
-                name: "signals",
-                placeholder: "e.g. 3 white soldiers + price above EMA 50",
-              },
-              {
-                label: "How does it fit your strategy?",
-                name: "strategyFit",
-                placeholder: "e.g. Matches my momentum breakout strategy",
-              },
-              {
-                label: "Optional Notes",
-                name: "note",
-                placeholder: "e.g. These are some other reasons",
-              },
-            ].map((field) => (
-              <label key={field.name} className="block">
-                <span className="block mb-1 font-medium">{field.label}</span>
-                <textarea
-                  name={field.name}
-                  value={form[field.name]}
+              <label>
+                <span className="block mb-1 font-medium">
+                  Stop Loss
+                </span>
+                <input
+                  type="number"
+                  name="stopLoss"
+                  value={form.stopLoss}
                   onChange={handleChange}
-                  placeholder={field.placeholder}
+                  placeholder="e.g. 120"
                   className="w-full p-2 border rounded"
                 />
+                {form.entryPrice && form.stopLoss && (
+                  <p className="text-xs text-gray-500 mt-1 pl-1">
+                    {(
+                      ((Number(form.entryPrice) - Number(form.stopLoss)) /
+                        Number(form.entryPrice)) *
+                      100
+                    ).toFixed(2) * (form.direction === "long" ? 1 : -1)}
+                    % downside risk
+                  </p>
+                )}
               </label>
-            ))}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <RiskRewardInput form={form} setForm={setForm} />
+
+
+
               <label className="block">
                 <span className="block mb-1 font-medium">
                   Mood at time of entry
@@ -284,35 +292,53 @@ export default function InputForm() {
                   ))}
                 </select>
               </label>
+            </div>
+            {/* Stop Loss and R/R */}
 
-              <label className="block">
-                <span className="block mb-1 font-medium">
-                  Confidence Level (1–10)
-                </span>
-                <input
-                  type="number"
-                  name="confidence"
-                  value={form.confidence}
+            <div className="grid grid-cols-3 gap-6"></div>
+
+            <ReasonCheckList
+              checklist={form.checklist}
+              setChecklist={setChecklist}
+            />
+
+            {[
+              {
+                label: "What do you expect to happen?",
+                name: "expectations",
+                placeholder:
+                  "e.g. Price will retest previous high within 2–3 days",
+              },
+
+              {
+                label: "Optional Notes",
+                name: "note",
+                placeholder: "e.g. These are some other reasons",
+              },
+              {
+                label: "Exit Plan or Conditions to Exit",
+                name: "exitPlan",
+                placeholder:
+                  "e.g. I will exit if price drops below trendline or loses volume",
+              },
+            ].map((field) => (
+              <label key={field.name} className="block">
+                <span className="block mb-1 font-medium">{field.label}</span>
+                <textarea
+                  name={field.name}
+                  value={form[field.name]}
                   onChange={handleChange}
-                  placeholder="Confidence Level (1–10)"
+                  placeholder={field.placeholder}
                   className="w-full p-2 border rounded"
                 />
               </label>
-
-              <label className="block">
-                <span className="block mb-1 font-medium">Journal Type</span>
-                <select
-                  name="journalType"
-                  value={form.journalType}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="buy">Buy</option>
-                  <option value="sell">Sell</option>
-                  <option value="watch">Watchlist Update</option>
-                </select>
-              </label>
-            </div>
+            ))}
+            <ConfidenceSlider
+              value={form.confidence}
+              onChange={(e) =>
+                setForm({ ...form, confidence: parseInt(e.target.value) })
+              }
+            />
 
             <div className="mt-4">
               <label className="block">

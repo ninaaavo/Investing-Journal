@@ -85,7 +85,7 @@ const SectorBreakdownChart = () => {
     <div
       className="w-full h-[350px] bg-white rounded-xl shadow-md p-4"
     >
-      <h2 className="text-lg font-semibold text-gray-800 mb-2">
+      <h2 className="text-lg font-semibold mb-2">
         Sector Breakdown
       </h2>
       <ResponsiveContainer width="100%" height="100%">

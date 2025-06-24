@@ -112,7 +112,7 @@ export default function Journal() {
           layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] },
         }}
         layout
-        className="overflow-y-auto"
+        className="overflow-y-auto overflow-x-hidden"
       >
         <AnimatePresence mode="wait" initial={false}>
           <JournalDetail key={selected.id} selected={selected} />
