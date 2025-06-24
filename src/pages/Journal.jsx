@@ -90,7 +90,7 @@ export default function Journal() {
   return (
     <motion.div
       key="journal"
-      className="flex h-[calc(100vh-150px)] bg-[var(--color-background)] rounded-xl overflow-hidden shadow-lg"
+      className="grid grid-cols-[1.5fr_5fr] gap-4 h-[calc(100vh-150px)] bg-[var(--color-background)] rounded-xl overflow-hidden shadow-lg"
     >
       {/* Left side: Journal List */}
       <JournalSidebar

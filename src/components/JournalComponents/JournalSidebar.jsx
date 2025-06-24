@@ -8,12 +8,12 @@ export default function JournalSidebar({
   onFilterChange,
 }) {
   return (
-    <div className="w-[45%]  bg-[var(--color-nav-background)] overflow-y-auto p-4">
+    <div className="w-full  bg-[var(--color-nav-background)] overflow-y-auto p-4 ">
       <h2 className="text-xl font-semibold text-text mb-4">Journal</h2>
 
       <JournalFilter filters={filters} onChange={onFilterChange} />
 
-      <ul className="space-y-2">
+      <ul className="space-y-2 w-full">
         {entries.map((entry) => (
           <li
             key={entry.id}

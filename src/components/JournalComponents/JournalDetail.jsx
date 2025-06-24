@@ -1,9 +1,27 @@
 import { motion } from "framer-motion";
+import { useState } from "react";
 import BuyJournalSummary from "./BuyJournalSummary";
 import CheckCard from "./CheckCard";
 import ReasonJournalCard from "./ReasonJournalCard";
+import MoodTimelineCard from "./MoodTimelineCard";
 
 export default function JournalDetail({ selected }) {
+  const [moodLogs, setMoodLogs] = useState([
+  {
+    mood: "😊 Calm",
+    reason: "This trade feels steady — my plan is clear, and the risk is managed.",
+    timestamp: "2025-06-24T14:20:00Z",
+  },
+  {
+    mood: "😰 Anxious",
+    reason: "I wasn’t sure about the market open — it felt volatile.",
+    timestamp: "2025-06-24T13:00:00Z",
+  },
+]);
+
+const handleAddMood = (newEntry) => {
+  setMoodLogs((prev) => [newEntry, ...prev]);
+};
   const checklist = {
     "Graph pattern": {
       value: "positive",
@@ -53,7 +71,7 @@ export default function JournalDetail({ selected }) {
         layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] },
       }}
       layout
-      className="flex-1 bg-white p-8 pt-4 rounded-l-xl"
+      className="flex-1 bg-white p-8 pt-4 rounded-l-xl w-full"
     >
       <div className="flex flex-wrap gap-[2%] justify-between w-full">
         <BuyJournalSummary
@@ -66,46 +84,13 @@ export default function JournalDetail({ selected }) {
         />
         <ReasonJournalCard checklist={checklist}   useWeightedScoring={true}
  />
-        <CheckCard
-          title="Company Quality"
-          criteria={[
-            {
-              type: "check",
-              text: "Make these optional :D, do i really need this for just short-term trade?",
-              checked: true,
-            },
-            {
-              type: "check",
-              text: "well then how about different sets of question for trade and invest :D",
-              checked: true,
-            },
-            {
-              type: "check",
-              text: "How about for technical traders, who cares mostly about graphs",
-              checked: false,
-            },
-            {
-              type: "check",
-              text: "Blue chip or well-established?",
-              checked: true,
-            },
-            {
-              type: "check",
-              text: "Consistently profitable & growing revenue?",
-              checked: true,
-            },
-            {
-              type: "check",
-              text: "Have strong brand, product, or competitive edge?",
-              checked: false,
-            },
-            {
-              type: "check",
-              text: "No major negative news recently?",
-              checked: true,
-            },
-          ]}
-        />
+<MoodTimelineCard
+  title="Mood Log"
+  moodLogs={moodLogs}
+  onAddMood={handleAddMood}
+/>
+        
+        
 
         <CheckCard
           title="Technical Signals"

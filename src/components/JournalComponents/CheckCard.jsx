@@ -1,6 +1,9 @@
 import { CheckCircle, Circle } from "lucide-react";
 
-export default function CompanyQualityCheck({ title = "Company Quality", criteria = [] }) {
+export default function CompanyQualityCheck({
+  title = "Company Quality",
+  criteria = [],
+}) {
   return (
     <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)]">
       <h2 className="text-xl font-semibold text-primary mb-4">{title}</h2>
@@ -16,7 +19,9 @@ export default function CompanyQualityCheck({ title = "Company Quality", criteri
                     <Circle className="w-5 h-5 text-gray-300" />
                   )}
                 </div>
-                <span className="text-sm text-[var(--color-text)] leading-snug">{item.text}</span>
+                <span className="text-sm text-[var(--color-text)] leading-snug">
+                  {item.text}
+                </span>
               </div>
             )}
             {item.type === "field" && (
@@ -27,7 +32,9 @@ export default function CompanyQualityCheck({ title = "Company Quality", criteri
                     return (
                       <>
                         {before}
-                        <span className="font-semibold text-primary">{item.value}</span>
+                        <span className="font-semibold text-primary">
+                          {item.value}
+                        </span>
                         {after}
                       </>
                     );
@@ -37,14 +44,24 @@ export default function CompanyQualityCheck({ title = "Company Quality", criteri
             )}
             {item.type === "textarea" && (
               <div>
-                <p className="text-sm text-[var(--color-text)] leading-snug mb-1">{item.text}</p>
-                <div className="bg-muted text-sm text-[var(--color-text)] p-3 rounded-md whitespace-pre-line">
-                  {item.value}
-                </div>
+                <p
+                  className={`text-sm text-[var(--color-text)] leading-snug mb-1 ${
+                    item.class || ""
+                  }`}
+                >
+                  {item.text}
+                </p>{" "}
               </div>
             )}
+            {item.type === "pill" && (
+              <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-md flex items-center gap-1">
+                {item.text}
+              </span>
+            )}
             {item.note && (
-              <p className="ml-8 text-xs text-[var(--color-text)] italic">{item.note}</p>
+              <p className="ml-8 text-xs text-[var(--color-text)] italic">
+                {item.note}
+              </p>
             )}
           </li>
         ))}
