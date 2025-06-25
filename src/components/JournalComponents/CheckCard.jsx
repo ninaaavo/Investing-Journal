@@ -1,6 +1,6 @@
 import { CheckCircle, Circle } from "lucide-react";
 
-export default function CompanyQualityCheck({
+export default function CheckCard({
   title = "Company Quality",
   criteria = [],
 }) {
