@@ -1,20 +1,63 @@
 import JournalFilter from "./JournalFilter";
+import { useState } from "react";
 
-export default function JournalSidebar({
-  entries,
-  selected,
-  onSelect,
-  filters,
-  onFilterChange,
-}) {
+export default function JournalSidebar({ entries, selected, onSelect }) {
+  const [filteredStocks, setFilteredStocks] = useState(entries);
+  const [filters, setFilters] = useState({
+    stock: "",
+    type: "",
+    fromDate: "",
+    toDate: "",
+  });
+  const clearFilter = () =>{
+    setFilteredStocks(entries);
+  }
+  const onFilterSubmit = () => {
+  const filtered = entries.filter((entry) => {
+    const matchesStock =
+      !filters.stock ||
+      entry.stock.toLowerCase().includes(filters.stock.toLowerCase());
+
+    const matchesType =
+      !filters.type ||
+      entry.type.toLowerCase() === filters.type.toLowerCase();
+
+    const entryDate = new Date(entry.date);
+    const matchesFromDate =
+      !filters.fromDate || entryDate >= new Date(filters.fromDate);
+
+    const matchesToDate =
+      !filters.toDate || entryDate <= new Date(filters.toDate);
+
+    return matchesStock && matchesType && matchesFromDate && matchesToDate;
+  });
+
+  setFilteredStocks(filtered);
+
+  // Clear the filters
+  setFilters({
+    stock: "",
+    type: "",
+    fromDate: "",
+    toDate: "",
+  });
+};
+
+
   return (
     <div className="w-full  bg-[var(--color-nav-background)] overflow-y-auto p-4 ">
       <h2 className="text-xl font-semibold text-text mb-4">Journal</h2>
 
-      <JournalFilter filters={filters} onChange={onFilterChange} />
-
+      <JournalFilter
+        filters={filters}
+        onChange={(field, value) => {
+          setFilters((prev) => ({ ...prev, [field]: value }));
+        }}
+        onSubmit={onFilterSubmit}
+        onClearFilter ={clearFilter}
+      />
       <ul className="space-y-2 w-full">
-        {entries.map((entry) => (
+        {filteredStocks.map((entry) => (
           <li
             key={entry.id}
             className={`bg-white px-4 py-2 rounded-lg cursor-pointer flex justify-between items-center shadow-sm transform transition-transform duration-200 hover:scale-[103%] active:scale-[97%] hover:bg-gray-100 ${

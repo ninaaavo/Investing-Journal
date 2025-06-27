@@ -46,7 +46,7 @@ export default function StockCard({ direction = "long", onActionClick, entries }
             <div>Bought Price: $100</div>
             <div>Current Price: $120</div>
           </div>
-          <div className="flex flex-col h-full items-end justify-between">
+          <div className="flex flex-col h-full items-end justify-between h-[120px]">
             <div
               className={`px-3 py-1 rounded-full text-xs font-semibold w-fit ${
                 isLong ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"

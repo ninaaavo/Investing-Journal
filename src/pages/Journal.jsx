@@ -80,12 +80,7 @@ const mockEntries = [
 
 export default function Journal() {
   const [selected, setSelected] = useState(mockEntries[0]);
-  const [filters, setFilters] = useState({
-    stock: "",
-    type: "",
-    fromDate: "",
-    toDate: "",
-  });
+  
 
   return (
     <motion.div
@@ -97,8 +92,7 @@ export default function Journal() {
         entries={mockEntries}
         selected={selected}
         onSelect={setSelected}
-        filters={filters}
-        onFilterChange={setFilters}
+        
       />
 
       {/* Right side: Journal Detail */}
