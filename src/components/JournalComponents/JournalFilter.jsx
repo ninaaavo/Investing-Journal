@@ -7,22 +7,21 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
   const [filterApplied, setFilterApplied] = useState(false);
 
   const handleSubmit = () => {
-     if (
-    !filters.stock.trim() &&
-    !filters.type &&
-    !filters.fromDate &&
-    !filters.toDate
-  ) {
-    return;
-  }
+    if (
+      !filters.ticker.trim() &&
+      !filters.type &&
+      !filters.fromDate &&
+      !filters.toDate
+    ) {
+      return;
+    }
     onSubmit();
     setFilterApplied(true);
     setOpen(false);
   };
-  console.log("filter applied is", filterApplied);
 
   const handleClear = () => {
-    onChange("stock", "");
+    onChange("ticker", "");
     onChange("type", "");
     onChange("fromDate", "");
     onChange("toDate", "");
@@ -33,13 +32,13 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
   return (
     <motion.div>
       {filterApplied && (
-  <button
-    onClick={handleClear}
-    className="mt-2 text-sm text-[var(--color-text)]  hover:opacity-70 flex justify-end items-center gap-1 w-full"
-  >
-    <span className="text-base">×</span> Clear Filter
-  </button>
-)}
+        <button
+          onClick={handleClear}
+          className="mt-2 text-sm text-[var(--color-text)] hover:opacity-70 flex justify-end items-center gap-1 w-full"
+        >
+          <span className="text-base">×</span> Clear Filter
+        </button>
+      )}
       <motion.div
         whileHover={{ scale: 1.02, boxShadow: "0 0 10px rgba(0, 0, 0, 0.2)" }}
         transition={{ duration: 0.3, ease: "easeOut" }}
@@ -77,16 +76,22 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
               transition={{ duration: 0.3, ease: "easeOut" }}
               className="overflow-hidden"
             >
-              <div className="p-4 space-y-4">
-                {/* Stock Name */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSubmit();
+                }}
+                className="p-4 space-y-4"
+              >
+                {/* Ticker Name */}
                 <div>
                   <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
-                    Stock Name
+                    Ticker
                   </label>
                   <input
                     type="text"
-                    value={filters.stock}
-                    onChange={(e) => onChange("stock", e.target.value)}
+                    value={filters.ticker}
+                    onChange={(e) => onChange("ticker", e.target.value)}
                     placeholder="e.g. AAPL"
                     className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
                   />
@@ -130,8 +135,7 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
                 </div>
 
                 <motion.button
-                  type="button"
-                  onClick={handleSubmit}
+                  type="submit"
                   whileHover={{ scale: 0.98 }}
                   whileTap={{ scale: 1.02 }}
                   transition={{
@@ -143,13 +147,11 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
                 >
                   Apply Filter
                 </motion.button>
-              </div>
+              </form>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
-      
-
     </motion.div>
   );
 }

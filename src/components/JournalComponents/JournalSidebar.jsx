@@ -4,7 +4,7 @@ import { useState } from "react";
 export default function JournalSidebar({ entries, selected, onSelect }) {
   const [filteredStocks, setFilteredStocks] = useState(entries);
   const [filters, setFilters] = useState({
-    stock: "",
+    ticker: "",
     type: "",
     fromDate: "",
     toDate: "",
@@ -14,9 +14,9 @@ export default function JournalSidebar({ entries, selected, onSelect }) {
   }
   const onFilterSubmit = () => {
   const filtered = entries.filter((entry) => {
-    const matchesStock =
-      !filters.stock ||
-      entry.stock.toLowerCase().includes(filters.stock.toLowerCase());
+    const matchesTicker =
+      !filters.ticker ||
+      entry.ticker.toLowerCase().includes(filters.ticker.toLowerCase());
 
     const matchesType =
       !filters.type ||
@@ -29,14 +29,14 @@ export default function JournalSidebar({ entries, selected, onSelect }) {
     const matchesToDate =
       !filters.toDate || entryDate <= new Date(filters.toDate);
 
-    return matchesStock && matchesType && matchesFromDate && matchesToDate;
+    return matchesTicker && matchesType && matchesFromDate && matchesToDate;
   });
 
   setFilteredStocks(filtered);
 
   // Clear the filters
   setFilters({
-    stock: "",
+    ticker: "",
     type: "",
     fromDate: "",
     toDate: "",
@@ -68,7 +68,7 @@ export default function JournalSidebar({ entries, selected, onSelect }) {
             onClick={() => onSelect(entry)}
           >
             <div>
-              <div className="font-medium text-text">{entry.stock}</div>
+              <div className="font-medium text-text">{entry.ticker}</div>
               <div className="text-sm text-gray-500">{entry.date}</div>
             </div>
             <span
