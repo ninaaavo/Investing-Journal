@@ -4,16 +4,11 @@ import StockCard from "../components/PositionComponents/StockCard";
 import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
 import InputForm from "../components/PositionComponents/InputForm";
 import ExitForm from "../components/PositionComponents/ExitForm";
-import { useNavigate } from "react-router-dom";
 
 export default function Positions() {
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showExitForm, setShowExitForm] = useState(false);
-  const navigate = useNavigate();
 
-  const handleCardClick = (ticker) => {
-    //(`/journal?ticker=${encodeURIComponent(ticker)}`);
-  };
   const sampleEntries = [
     {
       date: "6/26/25",
@@ -82,25 +77,21 @@ export default function Positions() {
                     direction="long"
                     onActionClick={() => setShowExitForm(true)}
                     entries={sampleEntries}
-                    onClick={() => handleCardClick("AAPL")}
                   />
                   <StockCard
                     direction="short"
                     onActionClick={() => setShowExitForm(true)}
                     entries={sampleEntries}
-                    onClick={() => handleCardClick("AAPL")}
                   />
                   <StockCard
                     direction="long"
                     onActionClick={() => setShowExitForm(true)}
                     entries={sampleEntries}
-                    onClick={() => handleCardClick("AAPL")}
                   />
                   <StockCard
                     direction="short"
                     onActionClick={() => setShowExitForm(true)}
                     entries={sampleEntries}
-                    onClick={() => handleCardClick("AAPL")}
                   />
                 </div>
               </div>

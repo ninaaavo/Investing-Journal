@@ -2,7 +2,12 @@ import { motion } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import JournalHoverCard from "./JournalHoverCard";
 
-export default function StockCard({ direction = "long", onActionClick, entries, onClick}) {
+export default function StockCard({
+  direction = "long",
+  onActionClick,
+  entries,
+  onClick,
+}) {
   const isLong = direction === "long";
   const actionLabel = isLong ? "Sell This" : "Buy This";
 
@@ -16,7 +21,7 @@ export default function StockCard({ direction = "long", onActionClick, entries, 
       setAnchorRect(rect);
     }
   }, [isHovering]);
-  console.log("my anchorRect is", anchorRect)
+  console.log("my anchorRect is", anchorRect);
 
   return (
     <div
@@ -51,14 +56,19 @@ export default function StockCard({ direction = "long", onActionClick, entries, 
           <div className="flex flex-col h-full items-end justify-between h-[120px]">
             <div
               className={`px-3 py-1 rounded-full text-xs font-semibold w-fit ${
-                isLong ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                isLong
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
               }`}
             >
               {direction.charAt(0).toUpperCase() + direction.slice(1)}
             </div>
             <motion.button
               type="button"
-              onClick={onActionClick}
+              onClick={(e) => {
+                e.stopPropagation(); // Prevent navigation
+                onActionClick(); // Call the passed function
+              }}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -73,7 +83,12 @@ export default function StockCard({ direction = "long", onActionClick, entries, 
       {/* Floating Journal card — visible while hovering */}
       {isHovering && (
         <div className="absolute -top-[220px] left-1/2 -translate-x-1/2 z-[999]">
-          <JournalHoverCard show={true} entries={entries} position="top" anchorRect={anchorRect} />
+          <JournalHoverCard
+            show={true}
+            entries={entries}
+            position="top"
+            anchorRect={anchorRect}
+          />
         </div>
       )}
     </div>

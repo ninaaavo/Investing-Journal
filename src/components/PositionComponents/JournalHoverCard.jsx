@@ -2,19 +2,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import ReactDOM from "react-dom";
 import React from "react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function JournalHoverCard({ show, entries, anchorRect }) {
+    const navigate = useNavigate();
+
   const [expandedIndex, setExpandedIndex] = useState(-1); // default to first entry expanded
 
   if (!show || !anchorRect) return null;
   if (!entries) return <div>Gimme ur entries</div>;
   const placementStyle = {
-  position: "absolute",
-  bottom: window.innerHeight - anchorRect.top - 100, // 8px for spacing (optional)
-  left: anchorRect.left + anchorRect.width / 2,
-  transform: "translateX(-50%)",
-};
-
+    position: "absolute",
+    bottom: window.innerHeight - anchorRect.top - 100, // 8px for spacing (optional)
+    left: anchorRect.left + anchorRect.width / 2,
+    transform: "translateX(-50%)",
+  };
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -30,7 +32,19 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
         }}
         className="w-[280px] p-4 bg-[var(--color-nav-background)] rounded-lg shadow-xl border border-gray-200 text-sm text-[var(--color-text)]"
       >
-        <div className="font-semibold text-base mb-2">Journal Summary</div>
+       <div className="flex justify-between items-center mb-2">
+  <div className="font-semibold text-base">Journal Summary</div>
+  <button
+    onClick={(e) => {
+      e.stopPropagation(); // prevent hover card closing or card click
+      navigate(`/journal?ticker=${encodeURIComponent(entries[0]?.ticker || "")}`);
+    }}
+    className="text-sm text-blue-600 hover:text-blue-800 underline transition-colors"
+  >
+    View Journal
+  </button>
+</div>
+
 
         <div className="space-y-2">
           {entries.map((entry, index) => {
