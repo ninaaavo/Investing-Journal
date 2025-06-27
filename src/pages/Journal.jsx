@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import JournalSidebar from "../components/JournalComponents/JournalSidebar";
 import JournalDetail from "../components/JournalComponents/JournalDetail";
+import { useSearchParams } from "react-router-dom";
 
 const mockEntries = [
   {
@@ -80,8 +81,9 @@ const mockEntries = [
 
 export default function Journal() {
   const [selected, setSelected] = useState(mockEntries[0]);
-  
-
+  const [searchParams] = useSearchParams();
+  const initialTicker = searchParams.get("ticker") || "";
+console.log("my initial ticker be", initialTicker)
   return (
     <motion.div
       key="journal"
@@ -92,7 +94,7 @@ export default function Journal() {
         entries={mockEntries}
         selected={selected}
         onSelect={setSelected}
-        
+        initialTicker={initialTicker}
       />
 
       {/* Right side: Journal Detail */}

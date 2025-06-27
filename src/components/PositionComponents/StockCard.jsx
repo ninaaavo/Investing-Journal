@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import JournalHoverCard from "./JournalHoverCard";
 
-export default function StockCard({ direction = "long", onActionClick, entries }) {
+export default function StockCard({ direction = "long", onActionClick, entries, onClick}) {
   const isLong = direction === "long";
   const actionLabel = isLong ? "Sell This" : "Buy This";
 
@@ -23,6 +23,7 @@ export default function StockCard({ direction = "long", onActionClick, entries }
       className="w-[calc(50%-12px)] relative"
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
+      onClick={onClick}
     >
       <motion.div
         initial={{ opacity: 0, y: 10 }}

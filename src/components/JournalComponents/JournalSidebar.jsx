@@ -1,14 +1,22 @@
 import JournalFilter from "./JournalFilter";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-export default function JournalSidebar({ entries, selected, onSelect }) {
+export default function JournalSidebar({ entries, selected, onSelect,  initialTicker = ""  }) {
   const [filteredStocks, setFilteredStocks] = useState(entries);
   const [filters, setFilters] = useState({
-    ticker: "",
+    ticker: initialTicker,
     type: "",
     fromDate: "",
     toDate: "",
   });
+  useEffect(() => {
+  if (initialTicker) {
+    const filtered = entries.filter((entry) =>
+      entry.ticker.toLowerCase().includes(initialTicker.toLowerCase())
+    );
+    setFilteredStocks(filtered);
+  }
+}, [initialTicker, entries]);
   const clearFilter = () =>{
     setFilteredStocks(entries);
   }

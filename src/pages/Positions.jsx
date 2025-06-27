@@ -4,50 +4,55 @@ import StockCard from "../components/PositionComponents/StockCard";
 import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
 import InputForm from "../components/PositionComponents/InputForm";
 import ExitForm from "../components/PositionComponents/ExitForm";
+import { useNavigate } from "react-router-dom";
 
 export default function Positions() {
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showExitForm, setShowExitForm] = useState(false);
+  const navigate = useNavigate();
+
+  const handleCardClick = (ticker) => {
+    console.log("i got clicked, my ticker is", ticker)
+    navigate(`/journal?ticker=${encodeURIComponent(ticker)}`);
+  };
   const sampleEntries = [
-  {
-    date: "6/26/25",
-    type: "Buy",
-    shares: 2,
-    price: 220,
-    reason: "Breakout confirmation after flag pattern.",
-    expectations: "Reach $230 within 3 days.",
-    strategyFit: "Matches EMA breakout strategy.",
-    mood: "Excited",
-    exitPlan: "Sell at 228 or after 2 red candles.",
-    confidence: 8,
-  },
-  {
-    date: "6/25/25",
-    type: "Buy",
-    shares: 4,
-    price: 198,
-    reason: "Double bottom formed on support.",
-    expectations: "Push up to $210",
-    strategyFit: "Mean reversion fit.",
-    mood: "Cautious",
-    exitPlan: "Stop loss at 192",
-    confidence: 6,
-  },
-  {
-    date: "6/24/25",
-    type: "Sell",
-    shares: 3,
-    price: 200,
-    reason: "Overbought RSI + bearish engulfing candle.",
-    expectations: "Downtrend continuation",
-    strategyFit: "Quick scalp exit",
-    mood: "Neutral",
-    exitPlan: "Done.",
-    confidence: 7,
-  },
-];
-
-
+    {
+      date: "6/26/25",
+      type: "Buy",
+      shares: 2,
+      price: 220,
+      reason: "Breakout confirmation after flag pattern.",
+      expectations: "Reach $230 within 3 days.",
+      strategyFit: "Matches EMA breakout strategy.",
+      mood: "Excited",
+      exitPlan: "Sell at 228 or after 2 red candles.",
+      confidence: 8,
+    },
+    {
+      date: "6/25/25",
+      type: "Buy",
+      shares: 4,
+      price: 198,
+      reason: "Double bottom formed on support.",
+      expectations: "Push up to $210",
+      strategyFit: "Mean reversion fit.",
+      mood: "Cautious",
+      exitPlan: "Stop loss at 192",
+      confidence: 6,
+    },
+    {
+      date: "6/24/25",
+      type: "Sell",
+      shares: 3,
+      price: 200,
+      reason: "Overbought RSI + bearish engulfing candle.",
+      expectations: "Downtrend continuation",
+      strategyFit: "Quick scalp exit",
+      mood: "Neutral",
+      exitPlan: "Done.",
+      confidence: 7,
+    },
+  ];
 
   return (
     <motion.div
@@ -74,10 +79,30 @@ export default function Positions() {
               {/* Scrollable content */}
               <div className="overflow-y-auto h-full pr-2">
                 <div className="flex flex-wrap justify-between pt-4 pb-6 px-6 w-full">
-                  <StockCard direction="long" onActionClick={() => setShowExitForm(true)} entries={sampleEntries} />
-                  <StockCard direction="short" onActionClick={() => setShowExitForm(true)} entries={sampleEntries} />
-                  <StockCard onActionClick={() => setShowExitForm(true)} />
-                  <StockCard onActionClick={() => setShowExitForm(true)} />
+                  <StockCard
+                    direction="long"
+                    onActionClick={() => setShowExitForm(true)}
+                    entries={sampleEntries}
+                    onClick={() => handleCardClick("AAPL")}
+                  />
+                  <StockCard
+                    direction="short"
+                    onActionClick={() => setShowExitForm(true)}
+                    entries={sampleEntries}
+                    onClick={() => handleCardClick("AAPL")}
+                  />
+                  <StockCard
+                    direction="long"
+                    onActionClick={() => setShowExitForm(true)}
+                    entries={sampleEntries}
+                    onClick={() => handleCardClick("AAPL")}
+                  />
+                  <StockCard
+                    direction="short"
+                    onActionClick={() => setShowExitForm(true)}
+                    entries={sampleEntries}
+                    onClick={() => handleCardClick("AAPL")}
+                  />
                 </div>
               </div>
             </div>
