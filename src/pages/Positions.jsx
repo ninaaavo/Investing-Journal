@@ -12,8 +12,7 @@ export default function Positions() {
   const navigate = useNavigate();
 
   const handleCardClick = (ticker) => {
-    console.log("i got clicked, my ticker is", ticker)
-    navigate(`/journal?ticker=${encodeURIComponent(ticker)}`);
+    //(`/journal?ticker=${encodeURIComponent(ticker)}`);
   };
   const sampleEntries = [
     {

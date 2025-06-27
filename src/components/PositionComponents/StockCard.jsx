@@ -16,6 +16,7 @@ export default function StockCard({ direction = "long", onActionClick, entries, 
       setAnchorRect(rect);
     }
   }, [isHovering]);
+  console.log("my anchorRect is", anchorRect)
 
   return (
     <div
