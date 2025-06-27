@@ -21,7 +21,6 @@ export default function InputForm() {
   }, [showExpandedForm]);
 
   const getPlaceholderForMood = (mood) => {
-    console.log("i got", mood)
     switch (mood) {
   case "calm":
     return "This trade feels steady — my plan is clear, and the risk is managed.";
