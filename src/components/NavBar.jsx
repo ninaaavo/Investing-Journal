@@ -17,7 +17,7 @@ export default function NavBar({ user }) {
     <motion.nav
       initial={{ y: -10, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
       className="bg-white px-6 py-4 shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl"
     >
       <div className="flex items-center justify-between">

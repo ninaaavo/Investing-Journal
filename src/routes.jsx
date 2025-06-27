@@ -22,7 +22,7 @@ export default function AppRoutes() {
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 10, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <Positions />
             </motion.div>
@@ -35,7 +35,7 @@ export default function AppRoutes() {
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 10, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <Journal />
             </motion.div>
@@ -48,7 +48,7 @@ export default function AppRoutes() {
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 10, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
             >
               <Profile />
             </motion.div>} />
