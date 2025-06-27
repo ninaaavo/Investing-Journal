@@ -69,58 +69,46 @@ export default function OverviewCard({ isEditingLayout }) {
 
             if (activeId === overId) return;
 
-            // Avoid repeated updates for same drag-over
             const key = `${activeId}->${overId}`;
             if (dragOverRef.current === key) return;
             dragOverRef.current = key;
 
-            const activeCol = findColumn(activeId);
-            const overCol = findColumn(overId);
-
-            if (!activeCol || !overCol || activeCol === overCol) return;
-
-            if (activeCol === "left") {
-              setLeftColumn((prev) => prev.filter((id) => id !== activeId));
-            } else {
-              setRightColumn((prev) => prev.filter((id) => id !== activeId));
-            }
-
-            const insertInto = (col, setter) => {
-              const index = col.indexOf(overId);
-              if (index === -1) {
-                setter([...col, activeId]);
-              } else {
-                setter([...col.slice(0, index), activeId, ...col.slice(index)]);
-              }
-            };
-
-            if (overCol === "left") {
-              insertInto(leftColumn, setLeftColumn);
-            } else {
-              insertInto(rightColumn, setRightColumn);
-            }
+            // No state updates here!
           }}
           onDragEnd={({ active, over }) => {
             dragOverRef.current = null;
-            if (!over || active.id === over.id) {
-              setActiveId(null);
-              return;
-            }
+            setActiveId(null);
 
-            const activeCol = findColumn(active.id);
-            const overCol = findColumn(over.id);
+            if (!over || active.id === over.id) return;
+
+            const activeId = active.id;
+            const overId = over.id;
+
+            const activeCol = findColumn(activeId);
+            const overCol = findColumn(overId);
+
             if (!activeCol || !overCol) return;
 
-            const from =
-              activeCol === "left" ? [...leftColumn] : [...rightColumn];
-            const setFrom =
-              activeCol === "left" ? setLeftColumn : setRightColumn;
+            const from = activeCol === "left" ? [...leftColumn] : [...rightColumn];
+            const to = overCol === "left" ? [...leftColumn] : [...rightColumn];
 
-            const oldIndex = from.indexOf(active.id);
-            const newIndex = from.indexOf(over.id);
-            const updated = arrayMove(from, oldIndex, newIndex);
-            setFrom(updated);
-            setActiveId(null);
+            const setFrom = activeCol === "left" ? setLeftColumn : setRightColumn;
+            const setTo = overCol === "left" ? setLeftColumn : setRightColumn;
+
+            const fromIndex = from.indexOf(activeId);
+            const overIndex = to.indexOf(overId);
+
+            if (activeCol === overCol) {
+              setFrom(arrayMove(from, fromIndex, overIndex));
+            } else {
+              const newFrom = from.filter((id) => id !== activeId);
+              const newTo =
+                overIndex === -1
+                  ? [...to, activeId]
+                  : [...to.slice(0, overIndex), activeId, ...to.slice(overIndex)];
+              setFrom(newFrom);
+              setTo(newTo);
+            }
           }}
         >
           <div className="flex gap-4">
@@ -149,10 +137,10 @@ export default function OverviewCard({ isEditingLayout }) {
           <DragOverlay>
             {activeId ? (
               <div className="rounded-xl shadow p-4 bg-white opacity-90">
-                  {(() => {
-                    const ActiveComponent = componentMap[activeId];
-                    return <ActiveComponent />;
-                  })()}
+                {(() => {
+                  const ActiveComponent = componentMap[activeId];
+                  return <ActiveComponent />;
+                })()}
               </div>
             ) : null}
           </DragOverlay>
@@ -180,7 +168,7 @@ function SortableCard({ id, isEditing }) {
       {...(isEditing ? { ...attributes, ...listeners } : {})}
       animate={{
         opacity: isDragging ? 0.4 : isEditing ? 0.7 : 1,
-        scale: isEditing ? [1, 1.01, 1] : 1, // subtle breathing effect
+        scale: isEditing ? [1, 1.01, 1] : 1,
       }}
       transition={{
         opacity: { duration: 0.3 },
@@ -202,7 +190,7 @@ function SortableCard({ id, isEditing }) {
       }`}
     >
       <div className={isEditing ? "pointer-events-none" : ""}>
-          <Component />
+        <Component />
       </div>
     </motion.div>
   );
