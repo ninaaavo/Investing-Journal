@@ -8,6 +8,36 @@ import ExitForm from "../components/PositionComponents/ExitForm";
 export default function Positions() {
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showExitForm, setShowExitForm] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+
+  const sampleChecklist = {
+  "Graph pattern": {
+    value: "positive",
+    comment: "Double bottoms near support zone",
+    weight: 4,
+  },
+  "Volume": {
+    value: "positive",
+    comment: "Volume surge at breakout",
+    weight: 2,
+  },
+  "RSI": {
+    value: "neutral",
+    comment: "RSI was mid-level, not too overbought",
+    weight: 1,
+  },
+  "EMA alignment": {
+    value: "positive",
+    comment: "Price was above 50 EMA",
+    weight: 3,
+  },
+  "News sentiment": {
+    value: "negative",
+    comment: "Mixed news around earnings report",
+    weight: 2,
+  },
+};
+
 
   const sampleEntries = [
     {
@@ -48,6 +78,25 @@ export default function Positions() {
     },
   ];
 
+  const handleExitClick = (stock) => {
+    const matchingBuys = sampleEntries.filter((entry) => entry.type === "Buy");
+    const mostRecentBuy = matchingBuys.at(-1); // or use .[0] for FIFO
+    const expectationText = mostRecentBuy?.expectations || "";
+    const totalShares = matchingBuys.reduce((acc, entry) => acc + entry.shares, 0);
+    const totalCost = matchingBuys.reduce((acc, entry) => acc + entry.shares * entry.price, 0);
+    const averagePrice = totalShares > 0 ? totalCost / totalShares : 0;
+    const entryDate = mostRecentBuy?.date || "";
+
+    setSelectedStock({
+      ...stock,
+      expectations: expectationText,
+      availableShares: totalShares,
+      averagePriceFromFIFO: averagePrice,
+      entryDate,
+    });
+    setShowExitForm(true);
+  };
+
   return (
     <motion.div
       key="positions"
@@ -56,7 +105,17 @@ export default function Positions() {
       {/* Left Side */}
       <div className="flex flex-col w-[calc((100%-40px)/2)]">
         {showExitForm ? (
-          <ExitForm onSubmit={() => setShowExitForm(false)} />
+          <ExitForm
+            onSubmit={() => setShowExitForm(false)}
+            onClose={() => setShowExitForm(false)}
+            availableShares={selectedStock?.availableShares || 0}
+            averagePriceFromFIFO={selectedStock?.averagePriceFromFIFO || 0}
+            ticker={selectedStock?.ticker || "TSLA"}
+            expectations={selectedStock?.expectations || ""}
+            entryDate={selectedStock?.entryDate || ""}
+              pastChecklist={sampleChecklist}
+
+          />
         ) : (
           <>
             <div>
@@ -73,26 +132,19 @@ export default function Positions() {
               {/* Scrollable content */}
               <div className="overflow-y-auto h-full pr-2">
                 <div className="flex flex-wrap justify-between pt-4 pb-6 px-6 w-full">
-                  <StockCard
-                    direction="long"
-                    onActionClick={() => setShowExitForm(true)}
-                    entries={sampleEntries}
-                  />
-                  <StockCard
-                    direction="short"
-                    onActionClick={() => setShowExitForm(true)}
-                    entries={sampleEntries}
-                  />
-                  <StockCard
-                    direction="long"
-                    onActionClick={() => setShowExitForm(true)}
-                    entries={sampleEntries}
-                  />
-                  <StockCard
-                    direction="short"
-                    onActionClick={() => setShowExitForm(true)}
-                    entries={sampleEntries}
-                  />
+                  {[
+                    { direction: "long", ticker: "TSLA" },
+                    { direction: "short", ticker: "NVDA" },
+                    { direction: "long", ticker: "AAPL" },
+                    { direction: "short", ticker: "AMZN" },
+                  ].map((stock, i) => (
+                    <StockCard
+                      key={i}
+                      direction={stock.direction}
+                      onActionClick={() => handleExitClick(stock)}
+                      entries={sampleEntries}
+                    />
+                  ))}
                 </div>
               </div>
             </div>

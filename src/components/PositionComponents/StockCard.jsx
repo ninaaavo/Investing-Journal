@@ -65,10 +65,7 @@ export default function StockCard({
             </div>
             <motion.button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent navigation
-                onActionClick(); // Call the passed function
-              }}
+              onClick={onActionClick}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}

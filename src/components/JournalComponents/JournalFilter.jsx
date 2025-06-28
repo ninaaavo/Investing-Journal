@@ -30,7 +30,7 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
   };
 
   return (
-    <motion.div>
+    <motion.div className="relative">
       {filterApplied && (
         <button
           onClick={handleClear}
@@ -39,6 +39,7 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
           <span className="text-base">×</span> Clear Filter
         </button>
       )}
+
       <motion.div
         whileHover={{ scale: 1.02, boxShadow: "0 0 10px rgba(0, 0, 0, 0.2)" }}
         transition={{ duration: 0.3, ease: "easeOut" }}

@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState } from "react"; 
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import JournalSidebar from "../components/JournalComponents/JournalSidebar";
 import JournalDetail from "../components/JournalComponents/JournalDetail";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 const mockEntries = [
+    { id: 17, stock: "Tesla", ticker: "TSLA", type: "Sell", date: "Jan 30, 2024" },
+
   {
     id: 16,
     stock: "Apple Inc.",
@@ -82,8 +84,10 @@ const mockEntries = [
 export default function Journal() {
   const [selected, setSelected] = useState(mockEntries[0]);
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const initialTicker = searchParams.get("ticker") || "";
-console.log("my initial ticker be", initialTicker)
+  const formSell = searchParams.get("type") === "Sell";
+  
   return (
     <motion.div
       key="journal"
@@ -95,6 +99,7 @@ console.log("my initial ticker be", initialTicker)
         selected={selected}
         onSelect={setSelected}
         initialTicker={initialTicker}
+        formSell={formSell}
       />
 
       {/* Right side: Journal Detail */}
@@ -108,11 +113,23 @@ console.log("my initial ticker be", initialTicker)
           layout: { duration: 0.4, ease: [0.25, 0.8, 0.25, 1] },
         }}
         layout
-        className="overflow-y-auto overflow-x-hidden"
+        className="overflow-y-auto overflow-x-hidden relative"
       >
         <AnimatePresence mode="wait" initial={false}>
           <JournalDetail key={selected.id} selected={selected} />
         </AnimatePresence>
+
+        {formSell && (
+          <div className="absolute top-4 right-4 bg-white border border-gray-300 p-3 rounded-lg shadow-md text-sm z-50">
+            <p className="mb-2">Done reviewing past trades?</p>
+            <button
+              onClick={() => navigate(-1)}
+              className="px-3 py-1 bg-[var(--color-primary)] text-white rounded hover:opacity-90"
+            >
+              Return to Exit Form
+            </button>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

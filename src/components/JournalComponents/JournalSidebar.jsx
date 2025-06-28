@@ -1,7 +1,7 @@
 import JournalFilter from "./JournalFilter";
 import { useState, useEffect } from "react";
 
-export default function JournalSidebar({ entries, selected, onSelect,  initialTicker = ""  }) {
+export default function JournalSidebar({ entries, selected, onSelect, initialTicker = "" , formSell}) {
   const [filteredStocks, setFilteredStocks] = useState(entries);
   const [filters, setFilters] = useState({
     ticker: initialTicker,
@@ -9,51 +9,62 @@ export default function JournalSidebar({ entries, selected, onSelect,  initialTi
     fromDate: "",
     toDate: "",
   });
+  console.log("your formsell", formSell)
+
+
   useEffect(() => {
-  if (initialTicker) {
-    const filtered = entries.filter((entry) =>
-      entry.ticker.toLowerCase().includes(initialTicker.toLowerCase())
-    );
+    let filtered = entries;
+
+    if (initialTicker) {
+      filtered = filtered.filter((entry) =>
+        entry.ticker.toLowerCase().includes(initialTicker.toLowerCase())
+      );
+    }
+
+    if (formSell) {
+      console.log("formsell in effect")
+      filtered = filtered.filter((entry) => entry.type.toLowerCase() === "sell");
+    }
+
     setFilteredStocks(filtered);
-  }
-}, [initialTicker, entries]);
-  const clearFilter = () =>{
+  }, [initialTicker, formSell, entries]);
+
+  const clearFilter = () => {
     setFilteredStocks(entries);
-  }
+  };
+
   const onFilterSubmit = () => {
-  const filtered = entries.filter((entry) => {
-    const matchesTicker =
-      !filters.ticker ||
-      entry.ticker.toLowerCase().includes(filters.ticker.toLowerCase());
+    const filtered = entries.filter((entry) => {
+      const matchesTicker =
+        !filters.ticker ||
+        entry.ticker.toLowerCase().includes(filters.ticker.toLowerCase());
 
-    const matchesType =
-      !filters.type ||
-      entry.type.toLowerCase() === filters.type.toLowerCase();
+      const matchesType =
+        !filters.type ||
+        entry.type.toLowerCase() === filters.type.toLowerCase();
 
-    const entryDate = new Date(entry.date);
-    const matchesFromDate =
-      !filters.fromDate || entryDate >= new Date(filters.fromDate);
+      const entryDate = new Date(entry.date);
+      const matchesFromDate =
+        !filters.fromDate || entryDate >= new Date(filters.fromDate);
 
-    const matchesToDate =
-      !filters.toDate || entryDate <= new Date(filters.toDate);
+      const matchesToDate =
+        !filters.toDate || entryDate <= new Date(filters.toDate);
 
-    return matchesTicker && matchesType && matchesFromDate && matchesToDate;
-  });
+      return matchesTicker && matchesType && matchesFromDate && matchesToDate;
+    });
 
-  setFilteredStocks(filtered);
+    setFilteredStocks(filtered);
 
-  // Clear the filters
-  setFilters({
-    ticker: "",
-    type: "",
-    fromDate: "",
-    toDate: "",
-  });
-};
-
+    setFilters({
+      ticker: "",
+      type: "",
+      fromDate: "",
+      toDate: "",
+    });
+  };
 
   return (
-    <div className="w-full  bg-[var(--color-nav-background)] overflow-y-auto p-4 ">
+    <div className="w-full bg-[var(--color-nav-background)] overflow-y-auto p-4 ">
       <h2 className="text-xl font-semibold text-text mb-4">Journal</h2>
 
       <JournalFilter
@@ -62,8 +73,9 @@ export default function JournalSidebar({ entries, selected, onSelect,  initialTi
           setFilters((prev) => ({ ...prev, [field]: value }));
         }}
         onSubmit={onFilterSubmit}
-        onClearFilter ={clearFilter}
+        onClearFilter={clearFilter}
       />
+
       <ul className="space-y-2 w-full">
         {filteredStocks.map((entry) => (
           <li
