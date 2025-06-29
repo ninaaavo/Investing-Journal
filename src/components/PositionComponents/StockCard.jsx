@@ -53,7 +53,7 @@ export default function StockCard({
             <div>Bought Price: $100</div>
             <div>Current Price: $120</div>
           </div>
-          <div className="flex flex-col h-full items-end justify-between h-[120px]">
+          <div className="flex flex-col h-full items-end justify-between h-[125px]">
             <div
               className={`px-3 py-1 rounded-full text-xs font-semibold w-fit ${
                 isLong
