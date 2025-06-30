@@ -1,31 +1,70 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
-import { auth, provider } from "../firebase";
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+import { auth, provider, db } from "../firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [user, setUser] = useState(null);
-  const hasRedirected = useRef(false); // 👈 to prevent multiple redirects
-
-  const handleLogin = async () => {
+  const handleEmailLogin = async (e) => {
+    e.preventDefault(); // prevent form reload
     try {
-      const result = await signInWithPopup(auth, provider);
-      if (result.user) {
-        navigate("/profile"); // redirect to profile
-      }
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      const user = result.user;
+      console.log("Email login success:", user.uid);
+      navigate("/profile");
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Email login error:", error.message);
     }
   };
 
-  const toSignUp = () => navigate("/signup");
+ const handleGoogleLogin = async () => {
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      const initialChecklistLabels = [
+        "Graph pattern",
+        "Candle pattern",
+        "Key level",
+        "EMA50",
+        "RSI",
+      ];
+
+      const preferredChecklist = initialChecklistLabels.reduce((acc, label) => {
+        acc[label] = { weight: 1 };
+        return acc;
+      }, {});
+
+      await setDoc(userRef, {
+        name: user.displayName || "",
+        email: user.email,
+        profilePicture: user.photoURL || "",
+        createdAt: new Date(),
+        preferredChecklist,
+      });
+    }
+
+    navigate("/profile");
+  } catch (error) {
+    console.error("Google login error:", error.message);
+  }
+};
+
 
   return (
     <div className="flex flex-col justify-center items-center flex h-[calc(100vh-150px)] space-y-6 ">
-      <div className=" flex flex-col justify-center items-center w-lg bg-[var(--color-background)] rounded-xl p-6 shadow-lg">
-        {/* Heading */}
+      <div className="flex flex-col justify-center items-center w-lg bg-[var(--color-background)] rounded-xl p-6 shadow-lg">
         <div className="text-center mb-6 pt-4">
           <h1 className="text-4xl font-bold">Log in to your account</h1>
           <p className="mt-1 text-sm opacity-80 p-4">
@@ -33,14 +72,16 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Form */}
-        <form className="w-full max-w-sm space-y-4">
+        <form className="w-full max-w-sm space-y-4" onSubmit={handleEmailLogin}>
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>
             <input
               type="email"
               placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:bg-[var(--color-nav-background)]"
+              required
             />
           </div>
 
@@ -49,7 +90,10 @@ export default function Login() {
             <input
               type="password"
               placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:bg-[var(--color-nav-background)]"
+              required
             />
           </div>
 
@@ -72,8 +116,8 @@ export default function Login() {
 
           <button
             type="button"
-            className="w-full border border-gray-300  py-2 rounded-md flex items-center justify-center gap-2 hover:bg-[var(--color-nav-background)] transition"
-            onClick={handleLogin}
+            onClick={handleGoogleLogin}
+            className="w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 hover:bg-[var(--color-nav-background)] transition"
           >
             <span className="text-lg">G</span> Sign in with Google
           </button>
@@ -81,7 +125,10 @@ export default function Login() {
 
         <p className="mt-6 text-sm">
           Don’t have an account?{" "}
-          <span onClick={toSignUp} className=" font-medium hover:underline">
+          <span
+            onClick={() => navigate("/signup")}
+            className="font-medium hover:underline cursor-pointer"
+          >
             Sign up
           </span>
         </p>

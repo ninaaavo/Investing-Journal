@@ -3,38 +3,76 @@ import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, provider } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
 export default function SignUp() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
+  const initialChecklist = [
+    "Graph pattern",
+    "Candle pattern",
+    "Key level",
+    "EMA50",
+    "RSI",
+  ].reduce((acc, item) => {
+    acc[item] = {}; // only store label key with empty object
+    return acc;
+  }, {});
 
   const handleSignUp = async (e) => {
-    e.preventDefault();
-    try {
-      const userCred = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
-      await updateProfile(userCred.user, { displayName: name });
-      console.log("Signed up:", userCred.user);
-    } catch (error) {
-      console.error("Sign up error:", error.message);
-    }
-  };
+    console.log("im handling sign up")
+  e.preventDefault();
+  try {
+    const userCred = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+    const user = userCred.user;
 
-  const handleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      if (result.user) {
-        navigate("/profile"); // redirect to profile
-      }
-    } catch (error) {
-      console.error("Login error:", error);
+    await updateProfile(user, { displayName: name });
+
+    await setDoc(doc(db, "users", user.uid), {
+      name,
+      email,
+      createdAt: new Date(),
+      preferredChecklist: initialChecklist,
+    });
+
+    navigate("/profile");
+  } catch (error) {
+    console.error("Sign up error:", error.message);
+  }
+};
+
+
+ const handleGoogleSignUp = async () => {
+   try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        name: user.displayName,
+        email: user.email,
+        profilePicture: user.photoURL || "",
+        createdAt: new Date(),
+        preferredChecklist: initialChecklist,
+      });
     }
-  };
+
+    navigate("/profile");
+  } catch (error) {
+    console.error("Google login error:", error.message);
+  }
+};
+
 
   return (
     <div className="flex flex-col justify-center items-center flex h-[calc(100vh-150px)] space-y-6 ">
@@ -92,7 +130,7 @@ export default function SignUp() {
           <button
             type="button"
             className="w-full border border-gray-300  py-2 rounded-md flex items-center justify-center gap-2 hover:bg-[var(--color-nav-background)] transition"
-            onClick={handleLogin}
+            onClick={handleGoogleSignUp}
           >
             <span className="text-lg">G</span> Sign up with Google
           </button>
