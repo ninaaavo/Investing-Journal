@@ -3,16 +3,20 @@ import { useState, useEffect } from "react";
 import ReasonCheckList from "./ReasonCheckList";
 import ConfidenceSlider from "./ConfidenceSlider";
 import RiskRewardInput from "./RiskRewardInput";
+import { db } from "../../firebase";
+import { auth } from "../../firebase";
+import {
+  collection,
+  addDoc,
+  doc,
+  setDoc,
+  serverTimestamp,
+  getDoc,
+  getDocs,
+  updateDoc,
+} from "firebase/firestore";
 
 export default function InputForm() {
-  const initialChecklistItems = [
-    "Graph pattern",
-    "Candle pattern",
-    "Key level",
-    "EMA50",
-    "RSI",
-  ];
-
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
 
@@ -22,22 +26,21 @@ export default function InputForm() {
 
   const getPlaceholderForMood = (mood) => {
     switch (mood) {
-  case "calm":
-    return "This trade feels steady — my plan is clear, and the risk is managed.";
-  case "anxious":
-    return "I feel uneasy about this trade — maybe I’m overthinking or unsure about my setup.";
-  case "excited":
-    return "This looks like a big opportunity — strong signals, good momentum, or a news catalyst.";
-  case "fearful":
-    return "I'm afraid this might go against me — maybe it's too volatile or I'm still recovering from a loss.";
-  case "bored":
-    return "Nothing really stands out — maybe I'm trading out of habit instead of conviction.";
-  case "impulsive":
-    return "I acted quickly without much confirmation — not sure if I followed my plan fully.";
-  default:
-    return "What made you feel this way about the trade?";
-}
-
+      case "calm":
+        return "This trade feels steady — my plan is clear, and the risk is managed.";
+      case "anxious":
+        return "I feel uneasy about this trade — maybe I’m overthinking or unsure about my setup.";
+      case "excited":
+        return "This looks like a big opportunity — strong signals, good momentum, or a news catalyst.";
+      case "fearful":
+        return "I'm afraid this might go against me — maybe it's too volatile or I'm still recovering from a loss.";
+      case "bored":
+        return "Nothing really stands out — maybe I'm trading out of habit instead of conviction.";
+      case "impulsive":
+        return "I acted quickly without much confirmation — not sure if I followed my plan fully.";
+      default:
+        return "What made you feel this way about the trade?";
+    }
   };
 
   const [form, setForm] = useState({
@@ -60,11 +63,35 @@ export default function InputForm() {
     exitPlan: "",
     riskReward: "",
     rrMode: "targetPrice", // or "riskReward"
-    checklist: initialChecklistItems.reduce((acc, item) => {
-      acc[item] = { value: "neutral", comment: "" };
-      return acc;
-    }, {}),
   });
+
+  // fetch checklist upon page load
+  useEffect(() => {
+    const fetchPreferredChecklist = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const data = userSnap.data();
+        if (data.preferredChecklist) {
+          setForm((prev) => ({
+            ...prev,
+            checklist: Object.fromEntries(
+              Object.entries(data.preferredChecklist).map(([label, item]) => [
+                label,
+                { value: "neutral", comment: "", weight: item.weight ?? 1 },
+              ])
+            ),
+          }));
+        }
+      }
+    };
+
+    fetchPreferredChecklist();
+  }, []);
 
   const setChecklist = (updatedChecklist) => {
     setForm((prev) => ({ ...prev, checklist: updatedChecklist }));
@@ -75,35 +102,113 @@ export default function InputForm() {
     setForm({ ...form, [name]: value });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Journal Entry Submitted:", form);
-    setShowExpandedForm(false);
-    setForm({
-      ticker: "",
-      shares: "",
-      entryPrice: "",
-      entryDate: "",
-      stopLoss: "",
-      targetPrice: "",
-      reason: "",
-      expectations: "",
-      signals: "",
-      strategyFit: "",
-      mood: "",
-      confidence: 5,
-      tags: "",
-      journalType: "buy",
-      direction: "long",
-      timeframe: "",
-      exitPlan: "",
-      riskReward: "",
-      rrMode: "targetPrice", // or "riskReward"
-      checklist: initialChecklistItems.reduce((acc, item) => {
-        acc[item] = { value: "neutral", comment: "" };
-        return acc;
-      }, {}),
-    });
+
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("User not authenticated");
+      return;
+    }
+
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      console.error("User doc not found");
+      return;
+    }
+
+    try {
+      const journalData = {
+        ...form,
+        createdAt: serverTimestamp(),
+      };
+      // Add journal entry
+      const journalRef = await addDoc(
+        collection(db, "users", user.uid, "journalEntries"),
+        journalData
+      );
+
+      // Add to current position, checking if currently have the same stock
+      const positionQuery = collection(
+        db,
+        "users",
+        user.uid,
+        "currentPositions"
+      );
+      const snapshot = await getDocs(positionQuery);
+      const existing = snapshot.docs.find(
+        (doc) =>
+          doc.data().ticker.toUpperCase() === form.ticker.toUpperCase() &&
+          doc.data().direction === form.direction
+      );
+
+      if (existing) {
+        const data = existing.data();
+        const totalShares = Number(data.shares) + Number(form.shares);
+        const totalCost =
+          Number(data.entryPrice) * Number(data.shares) +
+          Number(form.entryPrice) * Number(form.shares);
+        const newAvgPrice = totalCost / totalShares;
+
+        await updateDoc(
+          doc(db, "users", user.uid, "currentPositions", existing.id),
+          {
+            shares: totalShares,
+            entryPrice: newAvgPrice,
+            lastUpdated: serverTimestamp(),
+          }
+        );
+      } else {
+        await setDoc(
+          doc(db, "users", user.uid, "currentPositions", journalRef.id),
+          {
+            ticker: form.ticker.toUpperCase(),
+            shares: Number(form.shares),
+            entryPrice: Number(form.entryPrice),
+            entryDate: form.entryDate,
+            direction: form.direction,
+            journalEntryId: journalRef.id,
+            createdAt: serverTimestamp(),
+          }
+        );
+      }
+
+      const preferredChecklist = Object.fromEntries(
+        Object.entries(form.checklist).map(([key, val]) => [
+          key,
+          { value: "neutral", comment: "", weight: val.weight ?? 1 },
+        ])
+      );
+
+      //reset form to blank
+      setShowExpandedForm(false);
+      setForm({
+        ticker: "",
+        shares: "",
+        entryPrice: "",
+        entryDate: "",
+        stopLoss: "",
+        targetPrice: "",
+        reason: "",
+        expectations: "",
+        signals: "",
+        strategyFit: "",
+        mood: "",
+        confidence: 5,
+        tags: "",
+        journalType: "buy",
+        direction: "long",
+        timeframe: "",
+        exitPlan: "",
+        riskReward: "",
+        rrMode: "targetPrice",
+        checklist: preferredChecklist,
+      });
+    } catch (error) {
+      console.error("Error submitting journal:", error);
+    }
   };
 
   return (
@@ -197,7 +302,7 @@ export default function InputForm() {
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
                 className="rounded-md px-4 py-2 text-sm font-bold text-white bg-[var(--color-primary)] hover:opacity-80"
               >
-                Submit Entry
+                Expand Form
               </motion.button>
             </div>
           </div>
@@ -238,6 +343,7 @@ export default function InputForm() {
                       value={form[field.name]}
                       onChange={handleChange}
                       className="w-full p-2 border rounded"
+                      // required
                     >
                       <option value="">Select</option>
                       {field.options.map((option) => (
@@ -250,7 +356,12 @@ export default function InputForm() {
                     <input
                       type={field.type}
                       name={field.name}
-                      value={form[field.name]}
+                      value={
+                        form[field.name] ||
+                        (field.name === "entryDate"
+                          ? new Date().toISOString().split("T")[0]
+                          : "")
+                      }
                       onChange={handleChange}
                       placeholder={field.placeholder}
                       className="w-full p-2 border rounded"

@@ -1,4 +1,4 @@
-import { useState } from "react"; 
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import JournalSidebar from "../components/JournalComponents/JournalSidebar";
@@ -6,7 +6,13 @@ import JournalDetail from "../components/JournalComponents/JournalDetail";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
 const mockEntries = [
-    { id: 17, stock: "Tesla", ticker: "TSLA", type: "Sell", date: "Jan 30, 2024" },
+  {
+    id: 17,
+    stock: "Tesla",
+    ticker: "TSLA",
+    type: "Sell",
+    date: "Jan 30, 2024",
+  },
 
   {
     id: 16,
@@ -87,7 +93,7 @@ export default function Journal() {
   const navigate = useNavigate();
   const initialTicker = searchParams.get("ticker") || "";
   const formSell = searchParams.get("type") === "Sell";
-  
+
   return (
     <motion.div
       key="journal"
