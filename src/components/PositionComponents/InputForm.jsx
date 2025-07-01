@@ -23,10 +23,7 @@ export default function InputForm() {
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
   const handleKeyDown = (e) => {
-    console.log("helllooooo", e.key); // log the actual key
     if (e.key === "Enter") {
-      console.log("I'm here");
-      console.log("tickerDropdownOpen is", tickerDropdownOpen);
       if (tickerDropdownOpen) {
         // Let TickerSearchInput handle this
         return;
@@ -112,7 +109,7 @@ export default function InputForm() {
     };
 
     fetchPreferredChecklist();
-  }, []);
+  }, [showExpandedForm]);
 
   const setChecklist = (updatedChecklist) => {
     setForm((prev) => ({ ...prev, checklist: updatedChecklist }));
@@ -234,7 +231,6 @@ export default function InputForm() {
         exitPlan: "",
         riskReward: "",
         rrMode: "targetPrice",
-        checklist: updatedPreferredChecklist,
       });
       toast.success("📒 Journal entry submitted!", {
         position: "top-center",

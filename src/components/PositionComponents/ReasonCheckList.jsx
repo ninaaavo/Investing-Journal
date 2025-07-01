@@ -7,7 +7,6 @@ export default function ReasonCheckList({ checklist, setChecklist, editMode, set
   const checklistItems = Object.keys(checklist);
   const [editingWeights, setEditingWeights] = useState({});
   const hasMounted = useRef(true);
-
   useEffect(() => {
     const timeout = setTimeout(() => {
       hasMounted.current = true;
