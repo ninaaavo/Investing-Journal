@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 
+import { UserProvider } from "./context/UserContext";
+
 function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -28,6 +30,8 @@ function App() {
   }
 
   return (
+        <UserProvider>
+
     <BrowserRouter className="overflow-hidden">
       <ToastContainer position="top-center" autoClose={2000} />
 
@@ -38,6 +42,7 @@ function App() {
         </div>
       </div>
     </BrowserRouter>
+    </UserProvider>
   );
 }
 

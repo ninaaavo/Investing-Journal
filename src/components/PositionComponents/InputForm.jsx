@@ -15,10 +15,30 @@ import {
   getDocs,
   updateDoc,
 } from "firebase/firestore";
+import TickerSearchInput from "../TickerSearchInput";
+import { toast } from "react-toastify";
 
 export default function InputForm() {
+  const [editCheckListMode, setEditCheckListMode] = useState(false);
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
+  const handleKeyDown = (e) => {
+    console.log("helllooooo", e.key); // log the actual key
+    if (e.key === "Enter") {
+      console.log("I'm here");
+      console.log("tickerDropdownOpen is", tickerDropdownOpen);
+      if (tickerDropdownOpen) {
+        // Let TickerSearchInput handle this
+        return;
+      }
+      e.preventDefault();
+      setShowExpandedForm(true);
+    }
+  };
+
+  useEffect(() => {
+    setEditCheckListMode?.(editCheckListMode); // or whatever your edit mode boolean is
+  }, [editCheckListMode]);
 
   useEffect(() => {
     setFadeKey((prev) => prev + 1);
@@ -45,9 +65,10 @@ export default function InputForm() {
 
   const [form, setForm] = useState({
     ticker: "",
+    companyName: "",
     shares: "",
     entryPrice: "",
-    entryDate: "",
+    entryDate: new Date().toLocaleDateString("en-CA"),
     stopLoss: "",
     targetPrice: "",
     reason: "",
@@ -102,6 +123,8 @@ export default function InputForm() {
     setForm({ ...form, [name]: value });
   };
 
+  const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -130,7 +153,7 @@ export default function InputForm() {
         journalData
       );
 
-      // Add to current position, checking if currently have the same stock
+      // Add to current position, checking if currently have the same stock, calculate avg price
       const positionQuery = collection(
         db,
         "users",
@@ -148,7 +171,7 @@ export default function InputForm() {
         const data = existing.data();
         const totalShares = Number(data.shares) + Number(form.shares);
         const totalCost =
-          Number(data.entryPrice) * Number(data.shares) +
+          Number(data.averagePrice) * Number(data.shares) +
           Number(form.entryPrice) * Number(form.shares);
         const newAvgPrice = totalCost / totalShares;
 
@@ -156,7 +179,7 @@ export default function InputForm() {
           doc(db, "users", user.uid, "currentPositions", existing.id),
           {
             shares: totalShares,
-            entryPrice: newAvgPrice,
+            averagePrice: newAvgPrice,
             lastUpdated: serverTimestamp(),
           }
         );
@@ -165,8 +188,9 @@ export default function InputForm() {
           doc(db, "users", user.uid, "currentPositions", journalRef.id),
           {
             ticker: form.ticker.toUpperCase(),
+            companyName: form.companyName,
             shares: Number(form.shares),
-            entryPrice: Number(form.entryPrice),
+            averagePrice: Number(form.entryPrice),
             entryDate: form.entryDate,
             direction: form.direction,
             journalEntryId: journalRef.id,
@@ -175,20 +199,26 @@ export default function InputForm() {
         );
       }
 
-      const preferredChecklist = Object.fromEntries(
+      const updatedPreferredChecklist = Object.fromEntries(
         Object.entries(form.checklist).map(([key, val]) => [
           key,
-          { value: "neutral", comment: "", weight: val.weight ?? 1 },
+          { weight: val.weight ?? 1 },
         ])
       );
+
+      // Save updated preferred checklist to user's Firestore doc
+      await updateDoc(userRef, {
+        preferredChecklist: updatedPreferredChecklist,
+      });
 
       //reset form to blank
       setShowExpandedForm(false);
       setForm({
         ticker: "",
+        companyName: "",
         shares: "",
         entryPrice: "",
-        entryDate: "",
+        entryDate: new Date().toLocaleDateString("en-CA"),
         stopLoss: "",
         targetPrice: "",
         reason: "",
@@ -204,10 +234,21 @@ export default function InputForm() {
         exitPlan: "",
         riskReward: "",
         rrMode: "targetPrice",
-        checklist: preferredChecklist,
+        checklist: updatedPreferredChecklist,
+      });
+      toast.success("📒 Journal entry submitted!", {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "colored",
       });
     } catch (error) {
       console.error("Error submitting journal:", error);
+      toast.error("❌ Failed to submit entry. Please try again.");
     }
   };
 
@@ -231,7 +272,15 @@ export default function InputForm() {
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-            e.preventDefault();
+            if (!showExpandedForm) {
+              e.preventDefault();
+              setShowExpandedForm(true);
+            } else if (!editCheckListMode) {
+              // allow submit
+              return;
+            } else {
+              e.preventDefault(); // block enter when editing checklist
+            }
           }
         }}
         className={`relative p-6 mt-4 mb-8 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-full space-y-4 overflow-y-auto ${
@@ -255,52 +304,73 @@ export default function InputForm() {
           </motion.button>
         )}
 
+        {/* collapsed version  */}
         {!showExpandedForm && (
-          <div className="flex gap-4">
-            {[
-              {
-                label: "Ticker Name",
-                name: "ticker",
-                type: "text",
-                placeholder: "e.g. AAPL",
-              },
-              {
-                label: "Number of Shares",
-                name: "shares",
-                type: "number",
-                placeholder: "e.g. 10",
-              },
-              {
-                label: "Entry Price",
-                name: "entryPrice",
-                type: "number",
-                placeholder: "e.g. 175",
-              },
-            ].map((field) => (
-              <div key={field.name} className="flex flex-col gap-2 w-1/4">
-                <label>
-                  <span className="block mb-1 font-medium">{field.label}</span>
-                  <input
-                    type={field.type}
-                    name={field.name}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                    placeholder={field.placeholder}
-                    className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
-                    required
-                  />
-                </label>
-              </div>
-            ))}
-
-            <div className="flex flex-col gap-2 justify-end">
+          <div className="grid grid-cols-4 auto-rows-auto gap-x-6 gap-y-2">
+            {/* Shared handler */}
+            {/* Put this at the top of your component file or function body */}
+            {/* Row 1: Labels */}
+            <div>
+              <label className="block mb-1 font-medium">Ticker Name</label>
+            </div>
+            <div>
+              <label className="block mb-1 font-medium">Number of Shares</label>
+            </div>
+            <div>
+              <label className="block mb-1 font-medium">Entry Price</label>
+            </div>
+            <div /> {/* Empty cell to align above button */}
+            {/* Row 2: Inputs and Button */}
+            <div>
+              <TickerSearchInput
+                styling="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
+                form={form}
+                onKeyDown={(e) => {
+                  console.log("i got triggered");
+                  handleKeyDown(e); // ← you must CALL it with the event
+                }}
+                onDropdownState={setTickerDropdownOpen}
+                onSelect={(ticker, name) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    ticker,
+                    companyName: name,
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <input
+                type="number"
+                name="shares"
+                value={form.shares}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g. 10"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
+                required
+              />
+            </div>
+            <div>
+              <input
+                type="number"
+                name="entryPrice"
+                value={form.entryPrice}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                placeholder="e.g. 175"
+                className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
+                required
+              />
+            </div>
+            <div className="">
               <motion.button
-                type="submit"
+                type="button"
                 whileHover={{ scale: 1.01 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setShowExpandedForm(true)}
                 transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                className="rounded-md px-4 py-2 text-sm font-bold text-white bg-[var(--color-primary)] hover:opacity-80"
+                className="rounded-md w-full px-4 py-2 text-sm font-bold text-white bg-[var(--color-primary)] hover:opacity-80"
               >
                 Expand Form
               </motion.button>
@@ -308,12 +378,27 @@ export default function InputForm() {
           </div>
         )}
 
+        {/* expanded version */}
         {showExpandedForm && (
           <>
             {/* Basic Info */}
             <div className="grid grid-cols-3 gap-6 auto-rows-auto">
+              <div>
+                <span className="block font-medium">{"Ticker Name"}</span>
+
+                <TickerSearchInput
+                  styling={"w-full p-2 border rounded"}
+                  form={form}
+                  onSelect={(ticker, name) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      ticker,
+                      companyName: name,
+                    }))
+                  }
+                />
+              </div>
               {[
-                { label: "Ticker Name", name: "ticker", type: "text" },
                 { label: "Number of Shares", name: "shares", type: "number" },
                 { label: "Entry Price", name: "entryPrice", type: "number" },
                 { label: "Entry Date", name: "entryDate", type: "date" },
@@ -359,7 +444,7 @@ export default function InputForm() {
                       value={
                         form[field.name] ||
                         (field.name === "entryDate"
-                          ? new Date().toISOString().split("T")[0]
+                          ? new Date().toLocaleDateString("en-CA")
                           : "")
                       }
                       onChange={handleChange}
@@ -426,6 +511,8 @@ export default function InputForm() {
             <ReasonCheckList
               checklist={form.checklist}
               setChecklist={setChecklist}
+              editMode={editCheckListMode}
+              setEditMode={setEditCheckListMode}
             />
 
             {[
@@ -487,7 +574,6 @@ export default function InputForm() {
             </div>
 
             <motion.button
-              type="submit"
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}

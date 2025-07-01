@@ -3,9 +3,14 @@ import { useRef, useState, useEffect } from "react";
 import JournalHoverCard from "./JournalHoverCard";
 
 export default function StockCard({
+  ticker,
+  companyName = "",
   direction = "long",
+  shares,
+  averagePrice,
+  currentPrice,
   onActionClick,
-  entries,
+  entries = [],
   onClick,
 }) {
   const isLong = direction === "long";
@@ -14,14 +19,12 @@ export default function StockCard({
   const cardRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [anchorRect, setAnchorRect] = useState(null);
-
   useEffect(() => {
     if (isHovering && cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
       setAnchorRect(rect);
     }
   }, [isHovering]);
-  console.log("my anchorRect is", anchorRect);
 
   return (
     <div
@@ -47,13 +50,13 @@ export default function StockCard({
       >
         <div className="flex justify-between items-start h-fit">
           <div>
-            <div className="text-2xl font-medium">AAPL</div>
-            <div className="text-base mb-2">Apple Inc.</div>
-            <div>Shares: 10</div>
-            <div>Bought Price: $100</div>
-            <div>Current Price: $120</div>
+            <div className="text-2xl font-medium">{ticker}</div>
+            <div className="text-base mb-2">{companyName || "—"}</div>
+            <div>Shares: {shares}</div>
+            <div>Average Price: ${averagePrice.toFixed(2)}</div>
+            <div>Current Price: ${currentPrice || "—"}</div>
           </div>
-          <div className="flex flex-col h-full items-end justify-between h-[125px]">
+          <div className="flex flex-col h-full items-end justify-between h-[120px]">
             <div
               className={`px-3 py-1 rounded-full text-xs font-semibold w-fit ${
                 isLong
@@ -83,7 +86,6 @@ export default function StockCard({
           <JournalHoverCard
             show={true}
             entries={entries}
-            position="top"
             anchorRect={anchorRect}
           />
         </div>

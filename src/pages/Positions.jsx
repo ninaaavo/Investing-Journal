@@ -1,5 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import {
+  collection,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+} from "firebase/firestore";
+import { db } from "../firebase";
+import { useUser } from "../context/UserContext";
+
 import StockCard from "../components/PositionComponents/StockCard";
 import OverviewCard from "../components/PositionComponents/OverviewCard/OverviewCard";
 import InputForm from "../components/PositionComponents/InputForm";
@@ -9,83 +19,75 @@ export default function Positions() {
   const [isEditingLayout, setIsEditingLayout] = useState(false);
   const [showExitForm, setShowExitForm] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
+  const [stockList, setStockList] = useState([]);
+  const [journalMap, setJournalMap] = useState({});
+  const { user } = useUser();
 
-  const sampleChecklist = {
-  "Graph pattern": {
-    value: "positive",
-    comment: "Double bottoms near support zone",
-    weight: 4,
-  },
-  "Volume": {
-    value: "positive",
-    comment: "Volume surge at breakout",
-    weight: 2,
-  },
-  "RSI": {
-    value: "neutral",
-    comment: "RSI was mid-level, not too overbought",
-    weight: 1,
-  },
-  "EMA alignment": {
-    value: "positive",
-    comment: "Price was above 50 EMA",
-    weight: 3,
-  },
-  "News sentiment": {
-    value: "negative",
-    comment: "Mixed news around earnings report",
-    weight: 2,
-  },
-};
+  // Fetch current positions
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(collection(db, "users", user.uid, "currentPositions"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const stocks = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setStockList(stocks);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  // Fetch all journal entries and group them by ticker+direction
+useEffect(() => {
+  if (!user?.uid) return;
+
+  const q = query(
+    collection(db, "users", user.uid, "journalEntries"), // ← this was the issue
+    orderBy("createdAt", "asc")
+  );
+
+  const unsubscribe = onSnapshot(q, (snapshot) => {
+    const map = {};
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const ticker = data?.ticker;
+      const direction = data?.direction;
+
+      if (!ticker || !direction) return;
+
+      const key = `${ticker}_${direction}`;
+      if (!map[key]) map[key] = [];
+
+      map[key].push({ id: docSnap.id, ...data });
+    });
+
+    setJournalMap(map);
+  });
+
+  return () => unsubscribe();
+}, [user?.uid]);
 
 
-  const sampleEntries = [
-    {
-      date: "6/26/25",
-      type: "Buy",
-      shares: 2,
-      price: 220,
-      reason: "Breakout confirmation after flag pattern.",
-      expectations: "Reach $230 within 3 days.",
-      strategyFit: "Matches EMA breakout strategy.",
-      mood: "Excited",
-      exitPlan: "Sell at 228 or after 2 red candles.",
-      confidence: 8,
-    },
-    {
-      date: "6/25/25",
-      type: "Buy",
-      shares: 4,
-      price: 198,
-      reason: "Double bottom formed on support.",
-      expectations: "Push up to $210",
-      strategyFit: "Mean reversion fit.",
-      mood: "Cautious",
-      exitPlan: "Stop loss at 192",
-      confidence: 6,
-    },
-    {
-      date: "6/24/25",
-      type: "Sell",
-      shares: 3,
-      price: 200,
-      reason: "Overbought RSI + bearish engulfing candle.",
-      expectations: "Downtrend continuation",
-      strategyFit: "Quick scalp exit",
-      mood: "Neutral",
-      exitPlan: "Done.",
-      confidence: 7,
-    },
-  ];
 
   const handleExitClick = (stock) => {
-    const matchingBuys = sampleEntries.filter((entry) => entry.type === "Buy");
-    const mostRecentBuy = matchingBuys.at(-1); // or use .[0] for FIFO
+    const key = `${stock.ticker}_${stock.direction}`;
+    const entries = journalMap[key] || [];
+    const matchingBuys = entries.filter((entry) => entry.journalType === "buy");
+    const mostRecentBuy = matchingBuys.at(-1);
     const expectationText = mostRecentBuy?.expectations || "";
-    const totalShares = matchingBuys.reduce((acc, entry) => acc + entry.shares, 0);
-    const totalCost = matchingBuys.reduce((acc, entry) => acc + entry.shares * entry.price, 0);
+    const totalShares = matchingBuys.reduce(
+      (acc, entry) => acc + entry.shares,
+      0
+    );
+    const totalCost = matchingBuys.reduce(
+      (acc, entry) => acc + entry.shares * entry.entryPrice,
+      0
+    );
     const averagePrice = totalShares > 0 ? totalCost / totalShares : 0;
-    const entryDate = mostRecentBuy?.date || "";
+    const entryDate = mostRecentBuy?.entryDate || "";
 
     setSelectedStock({
       ...stock,
@@ -96,6 +98,40 @@ export default function Positions() {
     });
     setShowExitForm(true);
   };
+
+  const sampleChecklist = {
+    "Graph pattern": {
+      value: "positive",
+      comment: "Double bottoms near support zone",
+      weight: 4,
+    },
+    Volume: {
+      value: "positive",
+      comment: "Volume surge at breakout",
+      weight: 2,
+    },
+    RSI: {
+      value: "neutral",
+      comment: "RSI was mid-level, not too overbought",
+      weight: 1,
+    },
+    "EMA alignment": {
+      value: "positive",
+      comment: "Price was above 50 EMA",
+      weight: 3,
+    },
+    "News sentiment": {
+      value: "negative",
+      comment: "Mixed news around earnings report",
+      weight: 2,
+    },
+  };
+
+  // Sort stocks: long first, then short
+  const sortedStocks = [...stockList].sort((a, b) => {
+    if (a.direction === b.direction) return 0;
+    return a.direction === "long" ? -1 : 1;
+  });
 
   return (
     <motion.div
@@ -113,8 +149,7 @@ export default function Positions() {
             ticker={selectedStock?.ticker || "TSLA"}
             expectations={selectedStock?.expectations || ""}
             entryDate={selectedStock?.entryDate || ""}
-              pastChecklist={sampleChecklist}
-
+            pastChecklist={sampleChecklist}
           />
         ) : (
           <>
@@ -132,19 +167,26 @@ export default function Positions() {
               {/* Scrollable content */}
               <div className="overflow-y-auto h-full pr-2">
                 <div className="flex flex-wrap justify-between pt-4 pb-6 px-6 w-full">
-                  {[
-                    { direction: "long", ticker: "TSLA" },
-                    { direction: "short", ticker: "NVDA" },
-                    { direction: "long", ticker: "AAPL" },
-                    { direction: "short", ticker: "AMZN" },
-                  ].map((stock, i) => (
-                    <StockCard
-                      key={i}
-                      direction={stock.direction}
-                      onActionClick={() => handleExitClick(stock)}
-                      entries={sampleEntries}
-                    />
-                  ))}
+                  {sortedStocks.map((stock) => {
+                    const key = `${stock.ticker}_${stock.direction}`;
+                    // const entries = journalMap[key] || [];
+                 
+                    return (
+                      <StockCard
+                        key={stock.id}
+                        ticker={stock.ticker}
+                        companyName={stock.companyName} // optional, fallback is "—"
+                        direction={stock.direction}
+                        shares={stock.shares}
+                        averagePrice={stock.averagePrice}
+                        currentPrice={stock.currentPrice}
+                        entries={
+                          journalMap[`${stock.ticker}_${stock.direction}`] || []
+                        }
+                        onActionClick={() => handleExitClick(stock)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -152,14 +194,13 @@ export default function Positions() {
         )}
       </div>
 
-      {/* Right side */}
+      {/* Right Side */}
       <div className="w-[calc((100%-40px)/2)]">
         <div className="flex items-center justify-between mb-4">
-          <div className="text-lg font-medium"> Overview</div>
+          <div className="text-lg font-medium">Overview</div>
           <button
             onClick={() => {
               setIsEditingLayout((prev) => !prev);
-              console.log("your editing layout now is", isEditingLayout);
             }}
             className="text-sm font-semibold px-3 py-1 rounded-md bg-[var(--color-primary)] text-white shadow hover:opacity-80"
           >

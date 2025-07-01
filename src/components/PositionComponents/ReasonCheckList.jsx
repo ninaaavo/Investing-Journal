@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function ReasonCheckList({ checklist, setChecklist }) {
-  const [editMode, setEditMode] = useState(false);
+export default function ReasonCheckList({ checklist, setChecklist, editMode, setEditMode}) {
   const [useWeights, setUseWeights] = useState(false);
   const [newItem, setNewItem] = useState("");
   const checklistItems = Object.keys(checklist);

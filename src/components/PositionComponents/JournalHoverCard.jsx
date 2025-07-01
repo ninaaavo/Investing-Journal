@@ -5,18 +5,23 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function JournalHoverCard({ show, entries, anchorRect }) {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const [expandedIndex, setExpandedIndex] = useState(-1); // default to first entry expanded
-
   if (!show || !anchorRect) return null;
   if (!entries) return <div>Gimme ur entries</div>;
   const placementStyle = {
     position: "absolute",
-    bottom: window.innerHeight - anchorRect.top - 100, // 8px for spacing (optional)
+    bottom: window.innerHeight - anchorRect.top - 60, // 8px for spacing (optional)
     left: anchorRect.left + anchorRect.width / 2,
     transform: "translateX(-50%)",
   };
+  const formatEntryDate = (dateString) => {
+  if (!dateString) return "";
+  const [year, month, day] = dateString.split("-");
+  return `${month}/${day}/${year}`;
+};
+
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -32,35 +37,40 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
         }}
         className="w-[280px] p-4 bg-[var(--color-nav-background)] rounded-lg shadow-xl border border-gray-200 text-sm text-[var(--color-text)]"
       >
-       <div className="flex justify-between items-center mb-2">
-  <div className="font-semibold text-base">Journal Summary</div>
-  <button
-    onClick={(e) => {
-      e.stopPropagation(); // prevent hover card closing or card click
-      navigate(`/journal?ticker=${encodeURIComponent(entries[0]?.ticker || "")}`);
-    }}
-    className="text-sm text-blue-600 hover:text-blue-800 underline transition-colors"
-  >
-    View Journal
-  </button>
-</div>
-
+        <div className="flex justify-between items-center mb-2">
+          <div className="font-semibold text-base">Journal Summary</div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // prevent hover card closing or card click
+              navigate(
+                `/journal?ticker=${encodeURIComponent(
+                  entries[0]?.ticker || ""
+                )}`
+              );
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800 underline transition-colors"
+          >
+            View Journal
+          </button>
+        </div>
 
         <div className="space-y-2">
           {entries.map((entry, index) => {
             const isExpanded = index === expandedIndex;
             return (
-              <div key={entry.date}>
+              <div key={entry.entryDate}>
                 <div
                   onClick={() => setExpandedIndex(index)}
                   className={`cursor-pointer font-medium text-sm ${
-                    entry.type === "Buy" ? "" : "text-red-500"
+                    entry.journalType === "buy" ? "text-green-600" : "text-red-500"
                   }`}
                 >
                   {isExpanded ? "▾" : "▸"}{" "}
                   <span className=" hover:underline">
-                    {entry.date}: {entry.type} {entry.shares} shares at $
-                    {entry.price}
+                    {formatEntryDate(entry.entryDate)}:{" "}
+                    {entry.journalType.charAt(0).toUpperCase() +
+                      entry.journalType.slice(1)} {" "}
+                    {entry.shares} shares at ${entry.entryPrice}
                   </span>
                 </div>
                 <AnimatePresence>
