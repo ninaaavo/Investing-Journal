@@ -272,7 +272,7 @@ export default function InputForm() {
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-             if (!editCheckListMode) {
+            if (!editCheckListMode) {
               // allow submit
               return;
             } else {
@@ -571,6 +571,8 @@ export default function InputForm() {
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
               className="w-full rounded-md px-4 py-2 font-bold bg-gray-200  hover:opacity-80"
+              type="button"
+              onClick={() => setShowExpandedForm(false)}
             >
               Collapse Form
             </motion.button>
