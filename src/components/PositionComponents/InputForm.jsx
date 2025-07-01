@@ -272,10 +272,7 @@ export default function InputForm() {
         onSubmit={handleSubmit}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
-            if (!showExpandedForm) {
-              e.preventDefault();
-              setShowExpandedForm(true);
-            } else if (!editCheckListMode) {
+             if (!editCheckListMode) {
               // allow submit
               return;
             } else {
@@ -325,10 +322,6 @@ export default function InputForm() {
               <TickerSearchInput
                 styling="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
                 form={form}
-                onKeyDown={(e) => {
-                  console.log("i got triggered");
-                  handleKeyDown(e); // ← you must CALL it with the event
-                }}
                 onDropdownState={setTickerDropdownOpen}
                 onSelect={(ticker, name) =>
                   setForm((prev) => ({

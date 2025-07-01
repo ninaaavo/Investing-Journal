@@ -7,7 +7,6 @@ export default function TickerSearchInput({
   onSelect,
   styling,
   form,
-  onKeyDown, // parent-level keydown (e.g. expand form)
   onDropdownState, // notify parent if dropdown is open
 }) {
   const [query, setQuery] = useState(form.ticker || "");
