@@ -238,9 +238,9 @@ export default function ReasonCheckList({ checklist, setChecklist, editMode, set
                   }
                   className="p-2 border rounded col-span-1 font-medium focus:outline-none focus:ring-2 focus:ring-[var(--color-text)] focus:shadow-[0_0_6px_4px_rgba(0,0,0,0.1)]"
                 >
-                  <option value="positive">😎 Positive</option>
-                  <option value="neutral">🤔 Neutral</option>
-                  <option value="negative">😨 Negative</option>
+                  <option value="positive" className="text-green-600">😎 Positive</option>
+                  <option value="neutral" className="text-yellow-600">🤔 Neutral</option>
+                  <option value="negative" className="text-red-500">😨 Negative</option>
                 </select>
                 <div className="flex items-center gap-2">
                   <input
