@@ -75,18 +75,12 @@ useEffect(() => {
   const handleExitClick = (stock) => {
     const key = `${stock.ticker}_${stock.direction}`;
     const entries = journalMap[key] || [];
+    console.log("Your stocks are", stock);
     const matchingBuys = entries.filter((entry) => entry.journalType === "buy");
     const mostRecentBuy = matchingBuys.at(-1);
     const expectationText = mostRecentBuy?.expectations || "";
-    const totalShares = matchingBuys.reduce(
-      (acc, entry) => acc + entry.shares,
-      0
-    );
-    const totalCost = matchingBuys.reduce(
-      (acc, entry) => acc + entry.shares * entry.entryPrice,
-      0
-    );
-    const averagePrice = totalShares > 0 ? totalCost / totalShares : 0;
+    const totalShares = stock.shares;
+    const averagePrice = stock.averagePrice;
     const entryDate = mostRecentBuy?.entryDate || "";
 
     setSelectedStock({
@@ -144,11 +138,7 @@ useEffect(() => {
           <ExitForm
             onSubmit={() => setShowExitForm(false)}
             onClose={() => setShowExitForm(false)}
-            availableShares={selectedStock?.availableShares || 0}
-            averagePriceFromFIFO={selectedStock?.averagePriceFromFIFO || 0}
-            ticker={selectedStock?.ticker || "TSLA"}
-            expectations={selectedStock?.expectations || ""}
-            entryDate={selectedStock?.entryDate || ""}
+            stock ={selectedStock}
             pastChecklist={sampleChecklist}
           />
         ) : (
@@ -170,7 +160,6 @@ useEffect(() => {
                   {sortedStocks.map((stock) => {
                     const key = `${stock.ticker}_${stock.direction}`;
                     // const entries = journalMap[key] || [];
-                 
                     return (
                       <StockCard
                         key={stock.id}

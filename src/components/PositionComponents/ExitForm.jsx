@@ -1,5 +1,19 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
+import { db, auth } from "../../firebase";
+import {
+  doc,
+  setDoc,
+  addDoc,
+  serverTimestamp,
+  collection,
+  updateDoc,
+  getDoc,
+  getDocs,
+  deleteDoc,
+  increment,
+} from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 const EXIT_REASONS = [
   { label: "🎯 Hit target", value: "Hit target" },
@@ -15,13 +29,10 @@ const EXIT_REASONS = [
 export default function ExitForm({
   onSubmit,
   onClose,
-  availableShares,
-  averagePriceFromFIFO,
-  ticker,
-  expectations = "",
-  entryDate = "",
+  stock,
   pastChecklist = {},
 }) {
+  console.log("i got stock", stock)
   const [sellPrice, setSellPrice] = useState("");
   const [sharesSold, setSharesSold] = useState("");
   const [exitReason, setExitReason] = useState("");
@@ -30,49 +41,103 @@ export default function ExitForm({
   const [chartLink, setChartLink] = useState("");
   const [tags, setTags] = useState("");
   const [followedPlan, setFollowedPlan] = useState("");
-  const [exitDate, setExitDate] = useState("");
+  const [exitDate, setExitDate] = useState(
+    new Date().toLocaleDateString("en-CA")
+  );
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
   const [checklistReview, setChecklistReview] = useState({});
 
   const pAndL = useMemo(() => {
-    if (!sellPrice || !sharesSold || !averagePriceFromFIFO) return null;
-    const profit = (sellPrice - averagePriceFromFIFO) * sharesSold;
-    const percent = ((sellPrice - averagePriceFromFIFO) / averagePriceFromFIFO) * 100;
+    if (!sellPrice || !sharesSold || !stock.averagePriceFromFIFO) return null;
+    const profit = (sellPrice - stock.averagePriceFromFIFO) * sharesSold;
+    const percent =
+      ((sellPrice - stock.averagePriceFromFIFO) / stock.averagePriceFromFIFO) * 100;
     return { profit: profit.toFixed(2), percent: percent.toFixed(2) };
-  }, [sellPrice, sharesSold, averagePriceFromFIFO]);
+  }, [sellPrice, sharesSold, stock.averagePriceFromFIFO]);
 
   const tradeDuration = useMemo(() => {
-    if (!entryDate || !exitDate) return null;
-    const entry = new Date(entryDate);
+    if (!stock.entryDate || !exitDate) return null;
+    const entry = new Date(stock.entryDate);
     const exit = new Date(exitDate);
     const diff = Math.round((exit - entry) / (1000 * 60 * 60 * 24));
     return diff >= 0 ? diff : null;
-  }, [entryDate, exitDate]);
+  }, [stock.entryDate, exitDate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!sellPrice || !sharesSold || !exitReason) return;
-    onSubmit({
-      ticker,
+
+    const user = auth.currentUser;
+    if (!user) {
+      alert("User not logged in.");
+      return;
+    }
+
+    const entryData = {
+      ticker:stock.ticker,
       sellPrice: parseFloat(sellPrice),
       sharesSold: parseInt(sharesSold),
       exitReason,
       exitNotes,
       reflection,
       chartLink,
-      tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+      tags: tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
       followedPlan,
       pAndL,
       exitDate,
       tradeDuration,
       checklistReview,
-    });
+      createdAt: serverTimestamp(),
+      journalType: "Sell",
+    };
+
+    try {
+      const journalRef = await addDoc(
+        collection(db, "users", user.uid, "journalEntries"),
+        entryData
+      );
+
+      await addDoc(collection(db, "users", user.uid, "pastPositions"), {
+        ...entryData,
+        journalEntryId: stock.id,
+      });
+
+      // Optionally reduce shares or remove currentPosition (up to your logic)
+      console.log("id is", stock.id);
+      const currentPosRef = doc(
+        db,
+        "users",
+        user.uid,
+        "currentPositions",
+        stock.id
+      );
+      const currentDoc = await getDoc(currentPosRef);
+      console.log("your current doc", currentDoc);
+
+      if (currentDoc.exists()) {
+        const currentData = currentDoc.data();
+        const remainingShares = currentData.shares - parseInt(sharesSold);
+        if (remainingShares > 0) {
+          await updateDoc(currentPosRef, { shares: remainingShares });
+        } else {
+          await deleteDoc(currentPosRef);
+        }
+      }
+
+      if (onSubmit) onSubmit(entryData); // optional callback
+    } catch (err) {
+      console.error("Error saving exit:", err);
+      alert("Failed to save exit to the database.");
+    }
   };
 
   const handleReviewClick = (choice) => {
     setShowReviewPrompt(false);
     if (choice === "yes") {
-      window.location.href = `/journal?ticker=${ticker}&type=Sell`;
+      window.location.href = `/journal?ticker=${stock.ticker}&type=Sell`;
     }
   };
 
@@ -92,7 +157,10 @@ export default function ExitForm({
     >
       {showReviewPrompt && (
         <div className="bg-yellow-50 border border-yellow-300 p-4 rounded-md text-sm text-gray-800">
-          <p className="mb-2 font-medium">Would you like to review your past sell trades for {ticker} before completing this exit?</p>
+          <p className="mb-2 font-medium">
+            Would you like to review your past sell trades for {stock.ticker} before
+            completing this exit?
+          </p>
           <div className="flex gap-4">
             <button
               type="button"
@@ -128,11 +196,15 @@ export default function ExitForm({
             ×
           </motion.button>
 
-          <h2 className="text-xl font-semibold">Exit Trade — {ticker}</h2>
+          <h2 className="text-xl font-semibold">Exit Trade — {stock.ticker}</h2>
           <div className="text-sm text-gray-500">
-            Avg Cost (FIFO): <span className="font-medium">${averagePriceFromFIFO?.toFixed(2)}</span>
+            Avg Cost (FIFO):{" "}
+            <span className="font-medium">
+              ${stock.averagePriceFromFIFO?.toFixed(2)}
+            </span>
             {" · "}
-            Shares Available: <span className="font-medium">{availableShares}</span>
+            Shares Available:{" "}
+            <span className="font-medium">{stock.availableShares}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -156,7 +228,7 @@ export default function ExitForm({
                 onChange={(e) => setSharesSold(parseInt(e.target.value))}
                 className="w-full p-2 border rounded"
                 placeholder="e.g., 5"
-                max={availableShares}
+                max={stock.availableShares}
                 required
               />
             </label>
@@ -165,7 +237,7 @@ export default function ExitForm({
               <span className="block mb-1 font-medium">Exit Date</span>
               <input
                 type="date"
-                value={exitDate}
+                value={new Date().toLocaleDateString("en-CA")}
                 onChange={(e) => setExitDate(e.target.value)}
                 className="w-full p-2 border rounded"
                 required
@@ -174,14 +246,21 @@ export default function ExitForm({
           </div>
 
           {pAndL && (
-            <div className={`text-sm font-medium ${parseFloat(pAndL.profit) >= 0 ? "text-green-600" : "text-red-600"}`}>
+            <div
+              className={`text-sm font-medium ${
+                parseFloat(pAndL.profit) >= 0
+                  ? "text-green-600"
+                  : "text-red-600"
+              }`}
+            >
               P&L: ${pAndL.profit} ({pAndL.percent}%)
             </div>
           )}
 
           {tradeDuration !== null && (
             <div className="text-sm text-gray-600">
-              Holding Period: <span className="font-medium">{tradeDuration} days</span>
+              Holding Period:{" "}
+              <span className="font-medium">{tradeDuration} days</span>
             </div>
           )}
 
@@ -215,11 +294,17 @@ export default function ExitForm({
             </label>
           )}
 
-          {expectations && (
+          {stock.expectations && (
             <label className="block">
-              <span className="block mb-1 font-medium">Original Expectations</span>
-              <div className="text-sm text-gray-700 italic mb-2">“{expectations}”</div>
-              <span className="block mb-1 font-medium">Did this trade go according to plan?</span>
+              <span className="block mb-1 font-medium">
+                Original Expectations
+              </span>
+              <div className="text-sm text-gray-700 italic mb-2">
+                “{stock.expectations}”
+              </div>
+              <span className="block mb-1 font-medium">
+                Did this trade go according to plan?
+              </span>
               <select
                 value={followedPlan}
                 onChange={(e) => setFollowedPlan(e.target.value)}
@@ -236,12 +321,17 @@ export default function ExitForm({
           {pastChecklist && Object.keys(pastChecklist).length > 0 && (
             <div>
               <h3 className="font-semibold text-base">Trade Reason Review</h3>
-              <p className="text-sm text-gray-600 mb-2">Now that you’ve exited the trade, were these original reasons valid?</p>
+              <p className="text-sm text-gray-600 mb-2">
+                Now that you’ve exited the trade, were these original reasons
+                valid?
+              </p>
               <div className="space-y-2">
                 {Object.entries(pastChecklist).map(([key, val]) => (
                   <div key={key} className="text-sm">
                     <div className="font-medium">{key}</div>
-                    <div className="text-gray-500 italic mb-1">{val.comment}</div>
+                    <div className="text-gray-500 italic mb-1">
+                      {val.comment}
+                    </div>
                     <select
                       value={checklistReview[key] || ""}
                       onChange={(e) =>
@@ -275,7 +365,9 @@ export default function ExitForm({
           </label>
 
           <label className="block">
-            <span className="block mb-1 font-medium">Chart Link (optional)</span>
+            <span className="block mb-1 font-medium">
+              Chart Link (optional)
+            </span>
             <input
               type="url"
               value={chartLink}
@@ -286,7 +378,9 @@ export default function ExitForm({
           </label>
 
           <label className="block">
-            <span className="block mb-1 font-medium">Tags (comma-separated)</span>
+            <span className="block mb-1 font-medium">
+              Tags (comma-separated)
+            </span>
             <input
               type="text"
               value={tags}
