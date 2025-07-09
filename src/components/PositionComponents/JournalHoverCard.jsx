@@ -17,11 +17,12 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
     transform: "translateX(-50%)",
   };
   const formatEntryDate = (dateString) => {
-  if (!dateString) return "";
-  const [year, month, day] = dateString.split("-");
-  return `${month}/${day}/${year}`;
-};
+    if (!dateString) return "";
+    const [year, month, day] = dateString.split("-");
+    return `${month}/${day}/${year}`;
+  };
 
+  console.log("This is hover card my entries are", entries);
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -57,20 +58,24 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
         <div className="space-y-2">
           {entries.map((entry, index) => {
             const isExpanded = index === expandedIndex;
+            var isBuy = entry.journalType === "buy";
             return (
               <div key={entry.entryDate}>
                 <div
                   onClick={() => setExpandedIndex(index)}
                   className={`cursor-pointer font-medium text-sm ${
-                    entry.journalType === "buy" ? "text-green-600" : "text-red-500"
+                    entry.journalType === "buy"
+                      ? "text-green-600"
+                      : "text-red-500"
                   }`}
                 >
                   {isExpanded ? "▾" : "▸"}{" "}
                   <span className=" hover:underline">
-                    {formatEntryDate(entry.entryDate)}:{" "}
+                    {formatEntryDate(isBuy ? entry.entryDate : entry.exitDate)}:{" "}
                     {entry.journalType.charAt(0).toUpperCase() +
-                      entry.journalType.slice(1)} {" "}
-                    {entry.shares} shares at ${entry.entryPrice}
+                      entry.journalType.slice(1)}{" "}
+                    {entry.shares} shares at $
+                    {isBuy ? entry.entryPrice : entry.exitPrice}
                   </span>
                 </div>
                 <AnimatePresence>
@@ -88,6 +93,27 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           {entry.reason}
                         </div>
                       )}
+                      {entry.exitReason && (
+                        <div>
+                          <span className="font-medium">Exit Reason:</span>{" "}
+                          {entry.exitReason}
+                        </div>
+                      )}
+                      {entry.pAndL && (
+                        <div>
+                          <span className="font-medium">P/L:</span>{" "}
+                          <span
+                            className={
+                              entry.pAndL.profit < 0
+                                ? "text-red-500"
+                                : "text-green-500"
+                            }
+                          >
+                            {entry.pAndL.profit} ({entry.pAndL.percent}%)
+                          </span>
+                        </div>
+                      )}
+
                       {entry.expectations && (
                         <div>
                           <span className="font-medium">Expectations:</span>{" "}
@@ -112,10 +138,18 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           {entry.exitPlan}
                         </div>
                       )}
-                      <div>
-                        <span className="font-medium">Confidence:</span>{" "}
-                        {entry.confidence}/10
-                      </div>
+                      {entry.exitPlan && (
+                        <div>
+                          <span className="font-medium">Confidence:</span>{" "}
+                          {entry.confidence}/10
+                        </div>
+                      )}
+                      {entry.reflection && (
+                        <div>
+                          <span className="font-medium">Reflection:</span>{" "}
+                          {entry.reflection}
+                        </div>
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

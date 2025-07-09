@@ -44,7 +44,7 @@ useEffect(() => {
   if (!user?.uid) return;
 
   const q = query(
-    collection(db, "users", user.uid, "journalEntries"), // ← this was the issue
+    collection(db, "users", user.uid, "journalEntries"), 
     orderBy("createdAt", "asc")
   );
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { db, auth } from "../../firebase";
 import {
@@ -12,6 +12,9 @@ import {
   getDocs,
   deleteDoc,
   increment,
+  query,
+  where,
+  orderBy,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 
@@ -26,15 +29,12 @@ const EXIT_REASONS = [
   { label: "✨ Other", value: "Other" },
 ];
 
-export default function ExitForm({
-  onSubmit,
-  onClose,
-  stock,
-  pastChecklist = {},
-}) {
-  console.log("i got stock", stock)
-  const [sellPrice, setSellPrice] = useState("");
-  const [sharesSold, setSharesSold] = useState("");
+export default function ExitForm({ onSubmit, onClose, stock }) {
+  console.log("i got stock", stock);
+  const [entryChecklistMap, setEntryChecklistMap] = useState({});
+  const [checklistReview, setChecklistReview] = useState({});
+  const [exitPrice, setexitPrice] = useState("");
+  const [shares, setshares] = useState("");
   const [exitReason, setExitReason] = useState("");
   const [exitNotes, setExitNotes] = useState("");
   const [reflection, setReflection] = useState("");
@@ -45,15 +45,23 @@ export default function ExitForm({
     new Date().toLocaleDateString("en-CA")
   );
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
-  const [checklistReview, setChecklistReview] = useState({});
-
+  const [expectations, setExpectations] = useState([]);
+  const [showAllExpectations, setShowAllExpectations] = useState(false);
+  const [expandedReasons, setExpandedReasons] = useState({});
+  const toggleReasonExpand = (key) => {
+    setExpandedReasons((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
   const pAndL = useMemo(() => {
-    if (!sellPrice || !sharesSold || !stock.averagePriceFromFIFO) return null;
-    const profit = (sellPrice - stock.averagePriceFromFIFO) * sharesSold;
+    if (!exitPrice || !shares || !stock.averagePriceFromFIFO) return null;
+    const profit = (exitPrice - stock.averagePriceFromFIFO) * shares;
     const percent =
-      ((sellPrice - stock.averagePriceFromFIFO) / stock.averagePriceFromFIFO) * 100;
+      ((exitPrice - stock.averagePriceFromFIFO) / stock.averagePriceFromFIFO) *
+      100;
     return { profit: profit.toFixed(2), percent: percent.toFixed(2) };
-  }, [sellPrice, sharesSold, stock.averagePriceFromFIFO]);
+  }, [exitPrice, shares, stock.averagePriceFromFIFO]);
 
   const tradeDuration = useMemo(() => {
     if (!stock.entryDate || !exitDate) return null;
@@ -65,7 +73,7 @@ export default function ExitForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!sellPrice || !sharesSold || !exitReason) return;
+    if (!exitPrice || !shares || !exitReason) return;
 
     const user = auth.currentUser;
     if (!user) {
@@ -74,9 +82,9 @@ export default function ExitForm({
     }
 
     const entryData = {
-      ticker:stock.ticker,
-      sellPrice: parseFloat(sellPrice),
-      sharesSold: parseInt(sharesSold),
+      ticker: stock.ticker,
+      exitPrice: parseFloat(exitPrice),
+      shares: parseInt(shares),
       exitReason,
       exitNotes,
       reflection,
@@ -91,18 +99,13 @@ export default function ExitForm({
       tradeDuration,
       checklistReview,
       createdAt: serverTimestamp(),
-      journalType: "Sell",
+      journalType: stock.direction === "long" ? "sell" : "buy",
+      direction: stock.direction,
     };
 
     try {
-      const journalRef = await addDoc(
-        collection(db, "users", user.uid, "journalEntries"),
-        entryData
-      );
-
-      await addDoc(collection(db, "users", user.uid, "pastPositions"), {
+      await addDoc(collection(db, "users", user.uid, "journalEntries"), {
         ...entryData,
-        journalEntryId: stock.id,
       });
 
       // Optionally reduce shares or remove currentPosition (up to your logic)
@@ -119,7 +122,7 @@ export default function ExitForm({
 
       if (currentDoc.exists()) {
         const currentData = currentDoc.data();
-        const remainingShares = currentData.shares - parseInt(sharesSold);
+        const remainingShares = currentData.shares - parseInt(shares);
         if (remainingShares > 0) {
           await updateDoc(currentPosRef, { shares: remainingShares });
         } else {
@@ -134,12 +137,83 @@ export default function ExitForm({
     }
   };
 
+  useEffect(() => {
+    console.log("im here");
+    if (!stock || !stock.ticker || !stock.direction) return;
+
+    const fetchChecklist = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const journalRef = collection(db, "users", user.uid, "journalEntries");
+      const q = query(
+        journalRef,
+        where("ticker", "==", stock.ticker),
+        where("journalType", "==", stock.direction === "long" ? "buy" : "sell"),
+        orderBy("createdAt", "desc")
+      );
+      const snapshot = await getDocs(q);
+
+      const entries = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((entry) => entry.checklist);
+      console.log("i got entries", entries);
+
+      let totalNeeded = parseInt(shares || stock.availableShares);
+      const activeEntries = [];
+
+      for (const entry of entries) {
+        if (totalNeeded <= 0) break;
+        const sharesUsed = Math.min(entry.shares || 0, totalNeeded);
+        if (sharesUsed > 0) {
+          activeEntries.push({ ...entry, usedShares: sharesUsed });
+          totalNeeded -= sharesUsed;
+        }
+      }
+
+      const merged = {};
+      const expectationArr = [];
+
+      for (const entry of activeEntries) {
+        for (const [key, value] of Object.entries(entry.checklist)) {
+          if (!merged[key]) merged[key] = [];
+          merged[key].push({
+            date: entry.entryDate || "Unknown",
+            shares: entry.usedShares,
+            price: entry.entryPrice,
+            value: value.value,
+            comment: value.comment,
+          });
+        }
+
+        if (entry.expectations) {
+          expectationArr.push({
+            id: entry.id,
+            date: entry.entryDate || "Unknown",
+            shares: entry.usedShares,
+            price: entry.entryPrice,
+            expectation: entry.expectations,
+          });
+        }
+      }
+
+      setEntryChecklistMap(merged);
+      setExpectations(expectationArr);
+      console.log("entry check list now is", merged);
+      console.log("expectations", expectationArr);
+    };
+
+    fetchChecklist();
+  }, [stock, shares]);
+
   const handleReviewClick = (choice) => {
     setShowReviewPrompt(false);
     if (choice === "yes") {
       window.location.href = `/journal?ticker=${stock.ticker}&type=Sell`;
     }
   };
+
+  console.log("your expectations", expectations);
 
   return (
     <motion.form
@@ -158,8 +232,8 @@ export default function ExitForm({
       {showReviewPrompt && (
         <div className="bg-yellow-50 border border-yellow-300 p-4 rounded-md text-sm text-gray-800">
           <p className="mb-2 font-medium">
-            Would you like to review your past sell trades for {stock.ticker} before
-            completing this exit?
+            Would you like to review your past sell trades for {stock.ticker}{" "}
+            before completing this exit?
           </p>
           <div className="flex gap-4">
             <button
@@ -212,8 +286,8 @@ export default function ExitForm({
               <span className="block mb-1 font-medium">Sell Price</span>
               <input
                 type="number"
-                value={sellPrice}
-                onChange={(e) => setSellPrice(parseFloat(e.target.value))}
+                value={exitPrice}
+                onChange={(e) => setexitPrice(parseFloat(e.target.value))}
                 className="w-full p-2 border rounded"
                 placeholder="e.g., 115.50"
                 required
@@ -221,11 +295,11 @@ export default function ExitForm({
             </label>
 
             <label className="block">
-              <span className="block mb-1 font-medium">Shares Sold</span>
+              <span className="block mb-1 font-medium ">Shares Sold</span>
               <input
                 type="number"
-                value={sharesSold}
-                onChange={(e) => setSharesSold(parseInt(e.target.value))}
+                value={shares}
+                onChange={(e) => setshares(parseInt(e.target.value))}
                 className="w-full p-2 border rounded"
                 placeholder="e.g., 5"
                 max={stock.availableShares}
@@ -234,7 +308,7 @@ export default function ExitForm({
             </label>
 
             <label className="block">
-              <span className="block mb-1 font-medium">Exit Date</span>
+              <span className="block mb-1 font-medium text-lg">Exit Date</span>
               <input
                 type="date"
                 value={new Date().toLocaleDateString("en-CA")}
@@ -265,7 +339,9 @@ export default function ExitForm({
           )}
 
           <label className="block">
-            <span className="block mb-1 font-medium">Reason for Exit</span>
+            <span className="block mb-1 font-medium text-lg">
+              Reason for Exit
+            </span>
             <select
               value={exitReason}
               onChange={(e) => setExitReason(e.target.value)}
@@ -294,14 +370,40 @@ export default function ExitForm({
             </label>
           )}
 
-          {stock.expectations && (
+          {Array.isArray(expectations) && expectations.length > 0 && (
             <label className="block">
-              <span className="block mb-1 font-medium">
+              <span className="block mb-1 font-medium text-lg">
                 Original Expectations
               </span>
-              <div className="text-sm text-gray-700 italic mb-2">
-                “{stock.expectations}”
+
+              <div className="space-y-2 mb-4">
+                {(showAllExpectations ? expectations : [expectations[0]]).map(
+                  (exp, idx) => (
+                    <div
+                      key={exp.id || idx}
+                      className="text-sm text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
+                    >
+                      <p className="mb-1">“{exp.expectation}”</p>
+                      <p className="text-xs text-gray-500">
+                        {exp.date ? `Date: ${exp.date}` : ""}{" "}
+                        {exp.shares ? `| Shares: ${exp.shares}` : ""}{" "}
+                        {exp.price ? `| Price: $${exp.price}` : ""}
+                      </p>
+                    </div>
+                  )
+                )}
+
+                {expectations.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllExpectations((prev) => !prev)}
+                    className="text-sm text-blue-600 underline mt-1"
+                  >
+                    {showAllExpectations ? "Show Less" : "See More"}
+                  </button>
+                )}
               </div>
+
               <span className="block mb-1 font-medium">
                 Did this trade go according to plan?
               </span>
@@ -318,37 +420,66 @@ export default function ExitForm({
             </label>
           )}
 
-          {pastChecklist && Object.keys(pastChecklist).length > 0 && (
+          {Object.keys(entryChecklistMap).length > 0 && (
             <div>
-              <h3 className="font-semibold text-base">Trade Reason Review</h3>
+              <h3 className="font-semibold text-lg">Trade Reason Review</h3>
               <p className="text-sm text-gray-600 mb-2">
                 Now that you’ve exited the trade, were these original reasons
                 valid?
               </p>
-              <div className="space-y-2">
-                {Object.entries(pastChecklist).map(([key, val]) => (
-                  <div key={key} className="text-sm">
-                    <div className="font-medium">{key}</div>
-                    <div className="text-gray-500 italic mb-1">
-                      {val.comment}
+              <div className="space-y-4">
+                {Object.entries(entryChecklistMap).map(([key, entries]) => {
+                  const isExpanded = expandedReasons[key];
+                  const visibleEntries = isExpanded
+                    ? entries
+                    : entries.slice(0, 1);
+                  const hasMore = entries.length > 1;
+
+                  return (
+                    <div key={key}>
+                      <div className="font-medium mb-1">{key}</div>
+
+                      {visibleEntries.map((item, i) => (
+                        <div
+                          key={i}
+                          className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300"
+                        >
+                          <div className="text-sm text-gray-500">
+                            {item.date} – {item.shares} shares @ ${item.price} ➝{" "}
+                            {item.value}
+                          </div>
+                          <div className="italic">{item.comment}</div>
+                        </div>
+                      ))}
+
+                      {hasMore && (
+                        <button
+                          type="button"
+                          onClick={() => toggleReasonExpand(key)}
+                          className="text-sm text-blue-600 underline mt-1"
+                        >
+                          {isExpanded ? "Show Less" : "See More"}
+                        </button>
+                      )}
+
+                      <select
+                        value={checklistReview[key] || ""}
+                        onChange={(e) =>
+                          setChecklistReview((prev) => ({
+                            ...prev,
+                            [key]: e.target.value,
+                          }))
+                        }
+                        className="w-full p-1.5 mt-2 border border-gray-300 rounded"
+                      >
+                        <option value="">Review your judgment</option>
+                        <option value="positive">Helped the Trade</option>
+                        <option value="neutral">Didn’t Matter</option>
+                        <option value="negative">Shouldn’t have relied</option>
+                      </select>
                     </div>
-                    <select
-                      value={checklistReview[key] || ""}
-                      onChange={(e) =>
-                        setChecklistReview((prev) => ({
-                          ...prev,
-                          [key]: e.target.value,
-                        }))
-                      }
-                      className="w-full p-1.5 border border-gray-300 rounded"
-                    >
-                      <option value="">Review your judgment</option>
-                      <option value="positive">Still Positive</option>
-                      <option value="neutral">Didn’t Matter</option>
-                      <option value="negative">Shouldn’t have relied</option>
-                    </select>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

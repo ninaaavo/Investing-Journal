@@ -85,7 +85,7 @@ export default function StockCard({
         <div className="absolute -top-[220px] left-1/2 -translate-x-1/2 z-[999]">
           <JournalHoverCard
             show={true}
-            entries={entries}
+            entries={entries.toReversed().slice(0,4)}
             anchorRect={anchorRect}
           />
         </div>
