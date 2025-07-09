@@ -1,98 +1,48 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import JournalSidebar from "../components/JournalComponents/JournalSidebar";
 import JournalDetail from "../components/JournalComponents/JournalDetail";
 import { useSearchParams, useNavigate } from "react-router-dom";
-
-const mockEntries = [
-  {
-    id: 17,
-    stock: "Tesla",
-    ticker: "TSLA",
-    type: "Sell",
-    date: "Jan 30, 2024",
-  },
-
-  {
-    id: 16,
-    stock: "Apple Inc.",
-    ticker: "AAPL",
-    type: "Buy",
-    date: "Apr 20, 2024",
-  },
-  {
-    id: 15,
-    stock: "Google",
-    ticker: "GOOGL",
-    type: "Buy",
-    date: "Feb 15, 2024",
-  },
-  {
-    id: 14,
-    stock: "Microsoft",
-    ticker: "MSFT",
-    type: "Sell",
-    date: "Apr 10, 2024",
-  },
-  { id: 13, stock: "Tesla", ticker: "TSLA", type: "Buy", date: "Jan 30, 2024" },
-  { id: 12, stock: "Amazon", ticker: "AMZN", type: "Buy", date: "Jan 5, 2024" },
-  {
-    id: 11,
-    stock: "Google",
-    ticker: "GOOGL",
-    type: "Buy",
-    date: "Feb 15, 2024",
-  },
-  {
-    id: 10,
-    stock: "Apple Inc.",
-    ticker: "AAPL",
-    type: "Buy",
-    date: "Apr 20, 2024",
-  },
-  {
-    id: 9,
-    stock: "Google",
-    ticker: "GOOGL",
-    type: "Buy",
-    date: "Feb 15, 2024",
-  },
-  {
-    id: 8,
-    stock: "Microsoft",
-    ticker: "MSFT",
-    type: "Sell",
-    date: "Apr 10, 2024",
-  },
-  { id: 7, stock: "Tesla", ticker: "TSLA", type: "Buy", date: "Jan 30, 2024" },
-  { id: 6, stock: "Amazon", ticker: "AMZN", type: "Buy", date: "Jan 5, 2024" },
-  {
-    id: 5,
-    stock: "Google",
-    ticker: "GOOGL",
-    type: "Buy",
-    date: "Feb 15, 2024",
-  },
-  { id: 4, stock: "Tesla", ticker: "TSLA", type: "Buy", date: "Jan 30, 2024" },
-  { id: 3, stock: "Amazon", ticker: "AMZN", type: "Buy", date: "Jan 5, 2024" },
-  {
-    id: 2,
-    stock: "Google",
-    ticker: "GOOGL",
-    type: "Buy",
-    date: "Feb 15, 2024",
-  },
-  { id: 1, stock: "Tesla", ticker: "TSLA", type: "Buy", date: "Jan 30, 2024" },
-  { id: 0, stock: "Amazon", ticker: "AMZN", type: "Buy", date: "Jan 5, 2024" },
-];
+import { db, auth } from "../firebase"; // adjust path as needed
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 
 export default function Journal() {
-  const [selected, setSelected] = useState(mockEntries[0]);
+  const [entries, setEntries] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const initialTicker = searchParams.get("ticker") || "";
-  const formSell = searchParams.get("type") === "Sell";
+  const formSell = searchParams.get("type") === "sell";
+
+  useEffect(() => {
+    const fetchEntries = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const journalRef = collection(db, "users", user.uid, "journalEntries");
+      const q = query(journalRef, orderBy("createdAt", "desc"));
+
+      const snapshot = await getDocs(q);
+      const fetched = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      const formatted = fetched.map((entry, i) => ({
+        id: entry.id || i,
+        stock: entry.companyName || entry.ticker || "Unknown",
+        ticker: entry.ticker,
+        type: entry.journalType,
+        date: entry.entryDate || entry.exitDate ,
+        ...entry,
+      }));
+
+      setEntries(formatted);
+      if (formatted.length > 0) setSelected(formatted[0]);
+    };
+
+    fetchEntries();
+  }, []);
 
   return (
     <motion.div
@@ -101,7 +51,7 @@ export default function Journal() {
     >
       {/* Left side: Journal List */}
       <JournalSidebar
-        entries={mockEntries}
+        entries={entries}
         selected={selected}
         onSelect={setSelected}
         initialTicker={initialTicker}
@@ -122,7 +72,7 @@ export default function Journal() {
         className="overflow-y-auto overflow-x-hidden relative"
       >
         <AnimatePresence mode="wait" initial={false}>
-          <JournalDetail key={selected.id} selected={selected} />
+          {selected && <JournalDetail key={selected.id} selected={selected} />}
         </AnimatePresence>
 
         {formSell && (

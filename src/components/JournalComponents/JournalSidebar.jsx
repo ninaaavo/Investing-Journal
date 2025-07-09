@@ -93,12 +93,13 @@ export default function JournalSidebar({ entries, selected, onSelect, initialTic
             </div>
             <span
               className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                entry.type === "Buy"
+                entry.type === "buy"
                   ? "bg-green-100 text-green-800"
                   : "bg-red-100 text-red-700"
               }`}
             >
-              {entry.type}
+              {entry.type[0].toUpperCase() + entry.type.slice(1)
+}
             </span>
           </li>
         ))}
