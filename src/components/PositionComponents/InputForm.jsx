@@ -22,6 +22,8 @@ export default function InputForm() {
   const [editCheckListMode, setEditCheckListMode] = useState(false);
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
+  const [showTimeInput, setShowTimeInput] = useState(false);
+
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       if (tickerDropdownOpen) {
@@ -374,7 +376,6 @@ export default function InputForm() {
             <div className="grid grid-cols-3 gap-6 auto-rows-auto">
               <div>
                 <span className="block font-medium">{"Ticker Name"}</span>
-
                 <TickerSearchInput
                   styling={"w-full p-2 border rounded"}
                   form={form}
@@ -387,10 +388,23 @@ export default function InputForm() {
                   }
                 />
               </div>
+
               {[
+                {
+                  label: "Mood at time of entry",
+                  name: "mood",
+                  type: "select",
+                  options: [
+                    "😌 calm",
+                    "😟 anxious",
+                    "🤩 excited",
+                    "😨 fearful",
+                    "😐 bored",
+                    "⚡ impulsive",
+                  ],
+                },
                 { label: "Number of Shares", name: "shares", type: "number" },
                 { label: "Entry Price", name: "entryPrice", type: "number" },
-                { label: "Entry Date", name: "entryDate", type: "date" },
                 {
                   label: "Trade Direction",
                   name: "direction",
@@ -417,7 +431,6 @@ export default function InputForm() {
                       value={form[field.name]}
                       onChange={handleChange}
                       className="w-full p-2 border rounded"
-                      // required
                     >
                       <option value="">Select</option>
                       {field.options.map((option) => (
@@ -430,12 +443,7 @@ export default function InputForm() {
                     <input
                       type={field.type}
                       name={field.name}
-                      value={
-                        form[field.name] ||
-                        (field.name === "entryDate"
-                          ? new Date().toLocaleDateString("en-CA")
-                          : "")
-                      }
+                      value={form[field.name]}
                       onChange={handleChange}
                       placeholder={field.placeholder}
                       className="w-full p-2 border rounded"
@@ -443,6 +451,7 @@ export default function InputForm() {
                   )}
                 </label>
               ))}
+
               <label>
                 <span className="block mb-1 font-medium">Stop Loss</span>
                 <input
@@ -467,35 +476,38 @@ export default function InputForm() {
 
               <RiskRewardInput form={form} setForm={setForm} />
 
-              <label className="block">
-                <span className="block mb-1 font-medium">
-                  Mood at time of entry
+              {/* Entry Date / Time last row */}
+              <label className="relative">
+                <span className="block font-medium mb-1">
+                  {showTimeInput ? "Entry Time" : "Entry Date"}
                 </span>
-                <select
-                  name="mood"
-                  value={form.mood}
-                  onChange={handleChange}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="">Select mood</option>
-                  {[
-                    "😌 calm",
-                    "😟 anxious",
-                    "🤩 excited",
-                    "😨 fearful",
-                    "😐 bored",
-                    "⚡ impulsive",
-                  ].map((mood) => (
-                    <option key={mood} value={mood}>
-                      {mood}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type={showTimeInput ? "time" : "date"}
+                    name={showTimeInput ? "entryTime" : "entryDate"}
+                    value={form[showTimeInput ? "entryTime" : "entryDate"]}
+                    onChange={handleChange}
+                    className="w-full p-2 border rounded"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTimeInput(!showTimeInput)}
+                    className="absolute right-3 top-2.5 text-gray-500 hover:text-black"
+                  >
+                    {showTimeInput ? (
+                      <i className="fas fa-calendar-alt" />
+                    ) : (
+                      <i className="fas fa-clock" />
+                    )}
+                  </button>
+                </div>
+                {form.entryTime && showTimeInput && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    {form.entryDate} at {form.entryTime}
+                  </div>
+                )}
               </label>
             </div>
-            {/* Stop Loss and R/R */}
-
-            <div className="grid grid-cols-3 gap-6"></div>
 
             <ReasonCheckList
               checklist={form.checklist}

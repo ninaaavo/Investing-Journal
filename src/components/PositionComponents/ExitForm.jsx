@@ -280,6 +280,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             Shares Available:{" "}
             <span className="font-medium">{stock.availableShares}</span>
           </div>
+          
 
           <div className="grid grid-cols-3 gap-4">
             <label className="block">
@@ -338,7 +339,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </div>
           )}
 
-          <label className="block">
+          <label className="block pb-10 border-b border-gray-300">
             <span className="block mb-1 font-medium text-lg">
               Reason for Exit
             </span>
@@ -371,17 +372,17 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           )}
 
           {Array.isArray(expectations) && expectations.length > 0 && (
-            <label className="block">
+            <label className="block pt-4 pb-10 border-b border-gray-300">
               <span className="block mb-1 font-medium text-lg">
                 Original Expectations
               </span>
 
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4 pl-4">
                 {(showAllExpectations ? expectations : [expectations[0]]).map(
                   (exp, idx) => (
                     <div
                       key={exp.id || idx}
-                      className="text-sm text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
+                      className="text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
                     >
                       <p className="mb-1">“{exp.expectation}”</p>
                       <p className="text-xs text-gray-500">
@@ -421,7 +422,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           )}
 
           {Object.keys(entryChecklistMap).length > 0 && (
-            <div>
+            <div className="pt-4 pb-10 border-b border-gray-300">
               <h3 className="font-semibold text-lg">Trade Reason Review</h3>
               <p className="text-sm text-gray-600 mb-2">
                 Now that you’ve exited the trade, were these original reasons
@@ -442,7 +443,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                       {visibleEntries.map((item, i) => (
                         <div
                           key={i}
-                          className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300"
+                          className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300 ml-4"
                         >
                           <div className="text-sm text-gray-500">
                             {item.date} – {item.shares} shares @ ${item.price} ➝{" "}
@@ -456,7 +457,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                         <button
                           type="button"
                           onClick={() => toggleReasonExpand(key)}
-                          className="text-sm text-blue-600 underline mt-1"
+                          className="text-sm text-blue-600 underline mt-1 ml-4"
                         >
                           {isExpanded ? "Show Less" : "See More"}
                         </button>
@@ -485,7 +486,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           )}
 
           <label className="block">
-            <span className="block mb-1 font-medium">Reflection</span>
+            <span className="block mb-1 font-medium text-lg pt-4">Reflection</span>
             <textarea
               rows={3}
               value={reflection}
