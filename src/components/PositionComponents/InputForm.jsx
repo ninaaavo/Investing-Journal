@@ -325,13 +325,19 @@ export default function InputForm() {
                 styling="w-full border border-gray-300 rounded-md px-4 py-2 text-sm"
                 form={form}
                 onDropdownState={setTickerDropdownOpen}
-                onSelect={(ticker, name) =>
+                onSelect={(ticker, name) => {
+                  const titleCaseName = name
+                    .toLowerCase()
+                    .split(" ")
+                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(" ");
+
                   setForm((prev) => ({
                     ...prev,
                     ticker,
-                    companyName: name,
-                  }))
-                }
+                    companyName: titleCaseName,
+                  }));
+                }}
               />
             </div>
             <div>
@@ -394,19 +400,6 @@ export default function InputForm() {
               </div>
 
               {[
-                {
-                  label: "Mood at time of entry",
-                  name: "mood",
-                  type: "select",
-                  options: [
-                    "😌 calm",
-                    "😟 anxious",
-                    "🤩 excited",
-                    "😨 fearful",
-                    "😐 bored",
-                    "⚡ impulsive",
-                  ],
-                },
                 { label: "Number of Shares", name: "shares", type: "number" },
                 { label: "Entry Price", name: "entryPrice", type: "number" },
                 {
@@ -424,6 +417,19 @@ export default function InputForm() {
                     "Swing (1-10 days)",
                     "Position (weeks-months)",
                     "Long Term",
+                  ],
+                },
+                {
+                  label: "Mood at time of entry",
+                  name: "mood",
+                  type: "select",
+                  options: [
+                    "😌 calm",
+                    "😟 anxious",
+                    "🤩 excited",
+                    "😨 fearful",
+                    "😐 bored",
+                    "⚡ impulsive",
                   ],
                 },
               ].map((field) => (
