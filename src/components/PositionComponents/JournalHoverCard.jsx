@@ -58,7 +58,7 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
         <div className="space-y-2">
           {entries.map((entry, index) => {
             const isExpanded = index === expandedIndex;
-            var isBuy = entry.journalType === "buy";
+            var isEntry = (entry.journalType === "buy" && entry.direction === "long") || (entry.journalType === "sell" && entry.direction === "short");
             return (
               <div key={entry.entryDate}>
                 <div
@@ -71,11 +71,11 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                 >
                   {isExpanded ? "▾" : "▸"}{" "}
                   <span className=" hover:underline">
-                    {formatEntryDate(isBuy ? entry.entryDate : entry.exitDate)}:{" "}
+                    {formatEntryDate(isEntry ? entry.entryDate : entry.exitDate)}:{" "}
                     {entry.journalType.charAt(0).toUpperCase() +
                       entry.journalType.slice(1)}{" "}
                     {entry.shares} shares at $
-                    {isBuy ? entry.entryPrice : entry.exitPrice}
+                    {isEntry ? entry.entryPrice : entry.exitPrice}
                   </span>
                 </div>
                 <AnimatePresence>

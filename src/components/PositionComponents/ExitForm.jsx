@@ -56,12 +56,23 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
   };
   const pAndL = useMemo(() => {
     if (!exitPrice || !shares || !stock.averagePriceFromFIFO) return null;
-    const profit = (exitPrice - stock.averagePriceFromFIFO) * shares;
-    const percent =
-      ((exitPrice - stock.averagePriceFromFIFO) / stock.averagePriceFromFIFO) *
-      100;
-    return { profit: profit.toFixed(2), percent: percent.toFixed(2) };
-  }, [exitPrice, shares, stock.averagePriceFromFIFO]);
+
+    const isShort = stock.direction === "short";
+    const entry = stock.averagePriceFromFIFO;
+
+    const profit = isShort
+      ? (entry - exitPrice) * shares
+      : (exitPrice - entry) * shares;
+
+    const percent = isShort
+      ? ((entry - exitPrice) / entry) * 100
+      : ((exitPrice - entry) / entry) * 100;
+
+    return {
+      profit: profit.toFixed(2),
+      percent: percent.toFixed(2),
+    };
+  }, [exitPrice, shares, stock.averagePriceFromFIFO, stock.direction]);
 
   const tradeDuration = useMemo(() => {
     if (!stock.entryDate || !exitDate) return null;
@@ -199,8 +210,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
       setEntryChecklistMap(merged);
       setExpectations(expectationArr);
-      console.log("entry check list now is", merged);
-      console.log("expectations", expectationArr);
     };
 
     fetchChecklist();
@@ -280,11 +289,14 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             Shares Available:{" "}
             <span className="font-medium">{stock.availableShares}</span>
           </div>
-          
 
           <div className="grid grid-cols-3 gap-4">
             <label className="block">
-              <span className="block mb-1 font-medium">Sell Price</span>
+              <span className="block mb-1 font-medium">
+                {stock.direction === "short"
+                  ? "Buy to Cover Price"
+                  : "Sell Price"}
+              </span>
               <input
                 type="number"
                 value={exitPrice}
@@ -296,7 +308,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </label>
 
             <label className="block">
-              <span className="block mb-1 font-medium ">Shares Sold</span>
+              <span className="block mb-1 font-medium">
+                {stock.direction === "short" ? "Shares Covered" : "Shares Sold"}
+              </span>
               <input
                 type="number"
                 value={shares}
@@ -323,12 +337,15 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           {pAndL && (
             <div
               className={`text-sm font-medium ${
-                parseFloat(pAndL.profit) >= 0
+                (stock.direction === "short" &&
+                  parseFloat(pAndL.profit) >= 0) ||
+                (stock.direction !== "short" && parseFloat(pAndL.profit) >= 0)
                   ? "text-green-600"
                   : "text-red-600"
               }`}
             >
-              P&L: ${pAndL.profit} ({pAndL.percent}%)
+              {stock.direction === "short" ? "P&L (Cover):" : "P&L:"} $
+              {pAndL.profit} ({pAndL.percent}%)
             </div>
           )}
 
@@ -486,7 +503,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           )}
 
           <label className="block">
-            <span className="block mb-1 font-medium text-lg pt-4">Reflection</span>
+            <span className="block mb-1 font-medium text-lg pt-4">
+              Reflection
+            </span>
             <textarea
               rows={3}
               value={reflection}

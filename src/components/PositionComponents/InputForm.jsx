@@ -142,17 +142,22 @@ export default function InputForm() {
     }
 
     try {
+      // 🆕 Set journalType based on direction
+      const adjustedJournalType = form.direction === "short" ? "sell" : "buy";
+
       const journalData = {
         ...form,
+        journalType: adjustedJournalType,
         createdAt: serverTimestamp(),
       };
+
       // Add journal entry
       const journalRef = await addDoc(
         collection(db, "users", user.uid, "journalEntries"),
         journalData
       );
 
-      // Add to current position, checking if currently have the same stock, calculate avg price
+      // Add to current position
       const positionQuery = collection(
         db,
         "users",
@@ -205,12 +210,10 @@ export default function InputForm() {
         ])
       );
 
-      // Save updated preferred checklist to user's Firestore doc
       await updateDoc(userRef, {
         preferredChecklist: updatedPreferredChecklist,
       });
 
-      //reset form to blank
       setShowExpandedForm(false);
       setForm({
         ticker: "",
@@ -227,13 +230,14 @@ export default function InputForm() {
         mood: "",
         confidence: 5,
         tags: "",
-        journalType: "buy",
+        journalType: "buy", // fallback value
         direction: "long",
         timeframe: "",
         exitPlan: "",
         riskReward: "",
         rrMode: "targetPrice",
       });
+
       toast.success("📒 Journal entry submitted!", {
         position: "top-center",
         autoClose: 2000,
