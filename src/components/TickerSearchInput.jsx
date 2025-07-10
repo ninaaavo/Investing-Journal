@@ -11,7 +11,9 @@ export default function TickerSearchInput({
 }) {
   const [query, setQuery] = useState(form.ticker || "");
   const [suggestions, setSuggestions] = useState([]);
-  const [selectedDescription, setSelectedDescription] = useState(form.companyName || "");
+  const [selectedDescription, setSelectedDescription] = useState(
+    form.companyName || ""
+  );
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -149,12 +151,20 @@ export default function TickerSearchInput({
               <li
                 key={s.symbol}
                 className={`p-2 cursor-pointer ${
-                  index === highlightedIndex ? "bg-blue-100" : "hover:bg-gray-100"
+                  index === highlightedIndex
+                    ? "bg-blue-100"
+                    : "hover:bg-gray-100"
                 }`}
                 onClick={() => handleSelect(s.symbol, s.description)}
               >
                 <strong>{s.symbol}</strong> —{" "}
-                <span className="text-sm">{s.description}</span>
+                <span className="text-sm">
+                  {s.description
+                    .toLowerCase()
+                    .split(" ")
+                    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(" ")}
+                </span>
               </li>
             ))}
           </ul>,
