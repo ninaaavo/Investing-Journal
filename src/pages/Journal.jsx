@@ -72,7 +72,7 @@ export default function Journal() {
         className="overflow-y-auto overflow-x-hidden relative"
       >
         <AnimatePresence mode="wait" initial={false}>
-          {selected && <JournalDetail key={selected.id} selected={selected} />}
+          {selected && <JournalDetail key={selected.id} selected={selected} isEntry={(selected.direction==="long" && selected.journalType==="buy") || (selected.direction==="short" && selected.journalType==="sell")}/>}
         </AnimatePresence>
 
         {formSell && (

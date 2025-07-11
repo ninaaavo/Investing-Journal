@@ -138,16 +138,16 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           {entry.exitPlan}
                         </div>
                       )}
-                      {entry.exitPlan && (
-                        <div>
-                          <span className="font-medium">Confidence:</span>{" "}
-                          {entry.confidence}/10
-                        </div>
-                      )}
                       {entry.reflection && (
                         <div>
                           <span className="font-medium">Reflection:</span>{" "}
                           {entry.reflection}
+                        </div>
+                      )}
+                      {entry.confidence && (
+                        <div>
+                          <span className="font-medium">Confidence:</span>{" "}
+                          {entry.confidence}/10
                         </div>
                       )}
                     </motion.div>

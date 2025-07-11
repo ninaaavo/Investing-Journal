@@ -10,7 +10,7 @@ import ExitDecisionCard from "./InfoCard";
 import SellReasonReviewCard from "./SellReasonReviewCard";
 import InfoCard from "./InfoCard";
 import SellEvaluationCard from "./SellEvaluationCard";
-export default function JournalDetail({ selected, isBuy = false }) {
+export default function JournalDetail({ selected, isEntry = false }) {
   const [moodLogs, setMoodLogs] = useState([
     {
       label: "😊 Calm",
@@ -127,7 +127,7 @@ export default function JournalDetail({ selected, isBuy = false }) {
       layout
       className="flex-1 bg-white p-8 pt-4 rounded-l-xl w-full"
     >
-      {isBuy ? (
+      {isEntry ? (
         <div className="flex flex-wrap gap-[2%] w-full">
           <BuyJournalSummary
             name={selected.stock}
