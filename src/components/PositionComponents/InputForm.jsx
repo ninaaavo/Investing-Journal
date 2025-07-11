@@ -17,12 +17,11 @@ import {
 } from "firebase/firestore";
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
-
+import DateTimeInput from "./DateTimeInput";
 export default function InputForm() {
   const [editCheckListMode, setEditCheckListMode] = useState(false);
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
-  const [showTimeInput, setShowTimeInput] = useState(false);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
@@ -74,7 +73,6 @@ export default function InputForm() {
     expectations: "",
     signals: "",
     strategyFit: "",
-    mood: "",
     confidence: 5,
     tags: "",
     journalType: "buy",
@@ -113,6 +111,10 @@ export default function InputForm() {
     fetchPreferredChecklist();
   }, [showExpandedForm]);
 
+  const [moodEmoji, setMoodEmoji] = useState("");
+  const [moodLabel, setMoodLabel] = useState("");
+  const [moodReason, setMoodReason] = useState("");
+
   const setChecklist = (updatedChecklist) => {
     setForm((prev) => ({ ...prev, checklist: updatedChecklist }));
   };
@@ -145,8 +147,19 @@ export default function InputForm() {
       // 🆕 Set journalType based on direction
       const adjustedJournalType = form.direction === "short" ? "sell" : "buy";
 
+      const updatedMoodLog = [];
+      console.log("emo", moodEmoji, "label", moodLabel, "reason", moodReason);
+      if (moodEmoji && moodLabel) {
+        updatedMoodLog.push({
+          emoji: moodEmoji,
+          label: moodLabel,
+          time: new Date().toLocaleTimeString("en-US"),
+          reason: moodReason,
+        });
+      }
       const journalData = {
         ...form,
+        moodLog: updatedMoodLog,
         journalType: adjustedJournalType,
         createdAt: serverTimestamp(),
       };
@@ -227,7 +240,6 @@ export default function InputForm() {
         expectations: "",
         signals: "",
         strategyFit: "",
-        mood: "",
         confidence: 5,
         tags: "",
         journalType: "buy", // fallback value
@@ -237,6 +249,10 @@ export default function InputForm() {
         riskReward: "",
         rrMode: "targetPrice",
       });
+
+      setMoodEmoji("");
+      setMoodLabel("");
+      setMoodReason("");
 
       toast.success("📒 Journal entry submitted!", {
         position: "top-center",
@@ -419,19 +435,6 @@ export default function InputForm() {
                     "Long Term",
                   ],
                 },
-                {
-                  label: "Mood at time of entry",
-                  name: "mood",
-                  type: "select",
-                  options: [
-                    "😌 calm",
-                    "😟 anxious",
-                    "🤩 excited",
-                    "😨 fearful",
-                    "😐 bored",
-                    "⚡ impulsive",
-                  ],
-                },
               ].map((field) => (
                 <label key={field.name}>
                   <span className="block font-medium">{field.label}</span>
@@ -462,6 +465,34 @@ export default function InputForm() {
                 </label>
               ))}
 
+              {/* Separate Mood Field */}
+              <label>
+                <span className="block font-medium">Mood at time of entry</span>
+                <select
+                  value={`${moodEmoji} ${moodLabel}`.trim()}
+                  onChange={(e) => {
+                    const [emoji, ...labelParts] = e.target.value.split(" ");
+                    setMoodEmoji(emoji);
+                    setMoodLabel(labelParts.join(" "));
+                  }}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">Select</option>
+                  {[
+                    "😌 calm",
+                    "😟 anxious",
+                    "🤩 excited",
+                    "😨 fearful",
+                    "😐 bored",
+                    "⚡ impulsive",
+                  ].map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label>
                 <span className="block mb-1 font-medium">Stop Loss</span>
                 <input
@@ -486,37 +517,7 @@ export default function InputForm() {
 
               <RiskRewardInput form={form} setForm={setForm} />
 
-              {/* Entry Date / Time last row */}
-              <label className="relative">
-                <span className="block font-medium mb-1">
-                  {showTimeInput ? "Entry Time" : "Entry Date"}
-                </span>
-                <div className="relative">
-                  <input
-                    type={showTimeInput ? "time" : "date"}
-                    name={showTimeInput ? "entryTime" : "entryDate"}
-                    value={form[showTimeInput ? "entryTime" : "entryDate"]}
-                    onChange={handleChange}
-                    className="w-full p-2 border rounded"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowTimeInput(!showTimeInput)}
-                    className="absolute right-3 top-2.5 text-gray-500 hover:text-black"
-                  >
-                    {showTimeInput ? (
-                      <i className="fas fa-calendar-alt" />
-                    ) : (
-                      <i className="fas fa-clock" />
-                    )}
-                  </button>
-                </div>
-                {form.entryTime && showTimeInput && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    {form.entryDate} at {form.entryTime}
-                  </div>
-                )}
-              </label>
+              <DateTimeInput form={form} setForm={setForm} type="entry" />
             </div>
 
             <ReasonCheckList
@@ -533,7 +534,6 @@ export default function InputForm() {
                 placeholder:
                   "e.g. Price will retest previous high within 2–3 days",
               },
-
               {
                 label: "Optional Notes",
                 name: "note",
@@ -546,22 +546,29 @@ export default function InputForm() {
                   "e.g. I will exit if price drops below trendline or loses volume",
               },
               {
-                label: `What makes you feel ${form.mood.slice(2)}?`,
+                label: `What makes you feel ${moodLabel}?`,
                 name: "moodReason",
-                placeholder: getPlaceholderForMood(form.mood.slice(3)),
+                placeholder: getPlaceholderForMood(moodLabel),
               },
             ].map((field) => (
               <label key={field.name} className="block">
                 <span className="block mb-1 font-medium">{field.label}</span>
                 <textarea
                   name={field.name}
-                  value={form[field.name]}
-                  onChange={handleChange}
+                  value={
+                    field.name === "moodReason" ? moodReason : form[field.name]
+                  }
+                  onChange={
+                    field.name === "moodReason"
+                      ? (e) => setMoodReason(e.target.value)
+                      : handleChange
+                  }
                   placeholder={field.placeholder}
                   className="w-full p-2 border rounded"
                 />
               </label>
             ))}
+
             <ConfidenceSlider
               value={form.confidence}
               onChange={(e) =>

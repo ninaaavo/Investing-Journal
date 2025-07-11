@@ -11,12 +11,11 @@ import {
   getDoc,
   getDocs,
   deleteDoc,
-  increment,
   query,
   where,
   orderBy,
 } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import DateTimeInput from "./DateTimeInput";
 
 const EXIT_REASONS = [
   { label: "🎯 Hit target", value: "Hit target" },
@@ -30,61 +29,74 @@ const EXIT_REASONS = [
 ];
 
 export default function ExitForm({ onSubmit, onClose, stock }) {
-  console.log("i got stock", stock);
-  const [entryChecklistMap, setEntryChecklistMap] = useState({});
-  const [checklistReview, setChecklistReview] = useState({});
-  const [exitPrice, setexitPrice] = useState("");
-  const [shares, setshares] = useState("");
-  const [exitReason, setExitReason] = useState("");
-  const [exitNotes, setExitNotes] = useState("");
-  const [reflection, setReflection] = useState("");
-  const [chartLink, setChartLink] = useState("");
-  const [tags, setTags] = useState("");
-  const [followedPlan, setFollowedPlan] = useState("");
-  const [exitDate, setExitDate] = useState(
-    new Date().toLocaleDateString("en-CA")
-  );
+  const [error, setError] = useState("");
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
-  const [expectations, setExpectations] = useState([]);
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
+  const [form, setForm] = useState({
+    entryChecklistMap: {},
+    checklistReview: {},
+    exitPrice: "",
+    shares: "",
+    exitReason: "",
+    exitNotes: "",
+    reflection: "",
+    chartLink: "",
+    tags: "",
+    followedPlan: "",
+    exitDate: new Date().toLocaleDateString("en-CA"),
+    expectations: [],
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const setField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
   const toggleReasonExpand = (key) => {
     setExpandedReasons((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
   };
-  const pAndL = useMemo(() => {
-    if (!exitPrice || !shares || !stock.averagePriceFromFIFO) return null;
 
+  const pAndL = useMemo(() => {
+    if (!form.exitPrice || !form.shares || !stock.averagePriceFromFIFO)
+      return null;
     const isShort = stock.direction === "short";
     const entry = stock.averagePriceFromFIFO;
-
     const profit = isShort
-      ? (entry - exitPrice) * shares
-      : (exitPrice - entry) * shares;
-
+      ? (entry - form.exitPrice) * form.shares
+      : (form.exitPrice - entry) * form.shares;
     const percent = isShort
-      ? ((entry - exitPrice) / entry) * 100
-      : ((exitPrice - entry) / entry) * 100;
-
+      ? ((entry - form.exitPrice) / entry) * 100
+      : ((form.exitPrice - entry) / entry) * 100;
     return {
       profit: profit.toFixed(2),
       percent: percent.toFixed(2),
     };
-  }, [exitPrice, shares, stock.averagePriceFromFIFO, stock.direction]);
+  }, [
+    form.exitPrice,
+    form.shares,
+    stock.averagePriceFromFIFO,
+    stock.direction,
+  ]);
 
   const tradeDuration = useMemo(() => {
-    if (!stock.entryDate || !exitDate) return null;
+    if (!stock.entryDate || !form.exitDate) return null;
     const entry = new Date(stock.entryDate);
-    const exit = new Date(exitDate);
+    const exit = new Date(form.exitDate);
     const diff = Math.round((exit - entry) / (1000 * 60 * 60 * 24));
     return diff >= 0 ? diff : null;
-  }, [stock.entryDate, exitDate]);
+  }, [stock.entryDate, form.exitDate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!exitPrice || !shares || !exitReason) return;
+    if (!form.exitPrice || !form.shares || !form.exitReason) return;
 
     const user = auth.currentUser;
     if (!user) {
@@ -93,34 +105,23 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     }
 
     const entryData = {
+      ...form,
       ticker: stock.ticker,
-      exitPrice: parseFloat(exitPrice),
-      shares: parseInt(shares),
-      exitReason,
-      exitNotes,
-      reflection,
-      chartLink,
-      tags: tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-      followedPlan,
+      exitPrice: parseFloat(form.exitPrice),
+      shares: parseInt(form.shares),
       pAndL,
-      exitDate,
       tradeDuration,
-      checklistReview,
       createdAt: serverTimestamp(),
       journalType: stock.direction === "long" ? "sell" : "buy",
       direction: stock.direction,
     };
 
     try {
-      await addDoc(collection(db, "users", user.uid, "journalEntries"), {
-        ...entryData,
-      });
+      await addDoc(
+        collection(db, "users", user.uid, "journalEntries"),
+        entryData
+      );
 
-      // Optionally reduce shares or remove currentPosition (up to your logic)
-      console.log("id is", stock.id);
       const currentPosRef = doc(
         db,
         "users",
@@ -129,11 +130,10 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         stock.id
       );
       const currentDoc = await getDoc(currentPosRef);
-      console.log("your current doc", currentDoc);
 
       if (currentDoc.exists()) {
         const currentData = currentDoc.data();
-        const remainingShares = currentData.shares - parseInt(shares);
+        const remainingShares = currentData.shares - parseInt(form.shares);
         if (remainingShares > 0) {
           await updateDoc(currentPosRef, { shares: remainingShares });
         } else {
@@ -141,7 +141,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         }
       }
 
-      if (onSubmit) onSubmit(entryData); // optional callback
+      if (onSubmit) onSubmit(entryData);
     } catch (err) {
       console.error("Error saving exit:", err);
       alert("Failed to save exit to the database.");
@@ -149,9 +149,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
   };
 
   useEffect(() => {
-    console.log("im here");
-    if (!stock || !stock.ticker || !stock.direction) return;
-
     const fetchChecklist = async () => {
       const user = auth.currentUser;
       if (!user) return;
@@ -161,18 +158,15 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         journalRef,
         where("ticker", "==", stock.ticker),
         where("journalType", "==", stock.direction === "long" ? "buy" : "sell"),
-        orderBy("createdAt", "desc")
+        orderBy("createdAt", "asc")
       );
       const snapshot = await getDocs(q);
-
       const entries = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
         .filter((entry) => entry.checklist);
-      console.log("i got entries", entries);
 
-      let totalNeeded = parseInt(shares || stock.availableShares);
+      let totalNeeded = parseInt(form.shares || stock.availableShares);
       const activeEntries = [];
-
       for (const entry of entries) {
         if (totalNeeded <= 0) break;
         const sharesUsed = Math.min(entry.shares || 0, totalNeeded);
@@ -184,7 +178,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
       const merged = {};
       const expectationArr = [];
-
       for (const entry of activeEntries) {
         for (const [key, value] of Object.entries(entry.checklist)) {
           if (!merged[key]) merged[key] = [];
@@ -196,7 +189,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             comment: value.comment,
           });
         }
-
         if (entry.expectations) {
           expectationArr.push({
             id: entry.id,
@@ -208,12 +200,14 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         }
       }
 
-      setEntryChecklistMap(merged);
-      setExpectations(expectationArr);
+      setField("entryChecklistMap", merged);
+      setField("expectations", expectationArr);
     };
 
-    fetchChecklist();
-  }, [stock, shares]);
+    if (stock && stock.ticker && stock.direction) {
+      fetchChecklist();
+    }
+  }, [stock, form.shares]);
 
   const handleReviewClick = (choice) => {
     setShowReviewPrompt(false);
@@ -221,8 +215,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       window.location.href = `/journal?ticker=${stock.ticker}&type=Sell`;
     }
   };
-
-  console.log("your expectations", expectations);
 
   return (
     <motion.form
@@ -299,8 +291,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
               </span>
               <input
                 type="number"
-                value={exitPrice}
-                onChange={(e) => setexitPrice(parseFloat(e.target.value))}
+                value={form.exitPrice}
+                name="exitPrice"
+                onChange={handleChange}
                 className="w-full p-2 border rounded"
                 placeholder="e.g., 115.50"
                 required
@@ -313,25 +306,35 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
               </span>
               <input
                 type="number"
-                value={shares}
-                onChange={(e) => setshares(parseInt(e.target.value))}
+                value={form.shares}
+                name="shares"
+                onChange={(e) => {
+                  const value = parseInt(e.target.value);
+                  if (value < 1) {
+                    setError("Shares must be at least 1");
+                    setField("shares", 1);
+                  } else if (value > parseFloat(stock.availableShares)) {
+                    setError(
+                      `You only have ${stock.availableShares} shares available`
+                    );
+                    setField("shares", stock.availableShares);
+                  } else {
+                    setError("");
+                    setField("shares", value);
+                  }
+                }}
                 className="w-full p-2 border rounded"
                 placeholder="e.g., 5"
+                min={1}
                 max={stock.availableShares}
                 required
               />
+              {error && (
+                <p className="text-xs text-red-500 mt-1 pl-1">⚠️ {error}</p>
+              )}
             </label>
 
-            <label className="block">
-              <span className="block mb-1 font-medium text-lg">Exit Date</span>
-              <input
-                type="date"
-                value={new Date().toLocaleDateString("en-CA")}
-                onChange={(e) => setExitDate(e.target.value)}
-                className="w-full p-2 border rounded"
-                required
-              />
-            </label>
+            <DateTimeInput form={form} setForm={setForm} type="exit" />
           </div>
 
           {pAndL && (
@@ -361,8 +364,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
               Reason for Exit
             </span>
             <select
-              value={exitReason}
-              onChange={(e) => setExitReason(e.target.value)}
+              value={form.exitReason}
+              name="exitReason"
+              onChange={handleChange}
               className="w-full p-2 border rounded"
               required
             >
@@ -375,43 +379,45 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </select>
           </label>
 
-          {exitReason === "Other" && (
+          {form.exitReason === "Other" && (
             <label className="block">
               <span className="block mb-1 font-medium">Custom Reason</span>
               <input
                 type="text"
-                value={exitNotes}
-                onChange={(e) => setExitNotes(e.target.value)}
+                value={form.exitNotes}
+                name="exitNotes"
+                onChange={handleChange}
                 className="w-full p-2 border rounded"
                 placeholder="Describe your reason"
               />
             </label>
           )}
 
-          {Array.isArray(expectations) && expectations.length > 0 && (
+          {Array.isArray(form.expectations) && form.expectations.length > 0 && (
             <label className="block pt-4 pb-10 border-b border-gray-300">
               <span className="block mb-1 font-medium text-lg">
                 Original Expectations
               </span>
 
               <div className="space-y-2 mb-4 pl-4">
-                {(showAllExpectations ? expectations : [expectations[0]]).map(
-                  (exp, idx) => (
-                    <div
-                      key={exp.id || idx}
-                      className="text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
-                    >
-                      <p className="mb-1">“{exp.expectation}”</p>
-                      <p className="text-xs text-gray-500">
-                        {exp.date ? `Date: ${exp.date}` : ""}{" "}
-                        {exp.shares ? `| Shares: ${exp.shares}` : ""}{" "}
-                        {exp.price ? `| Price: $${exp.price}` : ""}
-                      </p>
-                    </div>
-                  )
-                )}
+                {(showAllExpectations
+                  ? form.expectations
+                  : [form.expectations[0]]
+                ).map((exp, idx) => (
+                  <div
+                    key={exp.id || idx}
+                    className="text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
+                  >
+                    <p className="mb-1">“{exp.expectation}”</p>
+                    <p className="text-xs text-gray-500">
+                      {exp.date ? `Date: ${exp.date}` : ""}{" "}
+                      {exp.shares ? `| Shares: ${exp.shares}` : ""}{" "}
+                      {exp.price ? `| Price: $${exp.price}` : ""}
+                    </p>
+                  </div>
+                ))}
 
-                {expectations.length > 1 && (
+                {form.expectations.length > 1 && (
                   <button
                     type="button"
                     onClick={() => setShowAllExpectations((prev) => !prev)}
@@ -426,8 +432,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                 Did this trade go according to plan?
               </span>
               <select
-                value={followedPlan}
-                onChange={(e) => setFollowedPlan(e.target.value)}
+                value={form.followedPlan}
+                name="followedPlan"
+                onChange={handleChange}
                 className="w-full p-2 border rounded"
               >
                 <option value="">Select</option>
@@ -438,7 +445,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </label>
           )}
 
-          {Object.keys(entryChecklistMap).length > 0 && (
+          {Object.keys(form.entryChecklistMap).length > 0 && (
             <div className="pt-4 pb-10 border-b border-gray-300">
               <h3 className="font-semibold text-lg">Trade Reason Review</h3>
               <p className="text-sm text-gray-600 mb-2">
@@ -446,58 +453,65 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                 valid?
               </p>
               <div className="space-y-4">
-                {Object.entries(entryChecklistMap).map(([key, entries]) => {
-                  const isExpanded = expandedReasons[key];
-                  const visibleEntries = isExpanded
-                    ? entries
-                    : entries.slice(0, 1);
-                  const hasMore = entries.length > 1;
+                {Object.entries(form.entryChecklistMap).map(
+                  ([key, entries]) => {
+                    const isExpanded = expandedReasons[key];
+                    const visibleEntries = isExpanded
+                      ? entries
+                      : entries.slice(0, 1);
+                    const hasMore = entries.length > 1;
 
-                  return (
-                    <div key={key}>
-                      <div className="font-medium mb-1">{key}</div>
+                    return (
+                      <div key={key}>
+                        <div className="font-medium mb-1">{key}</div>
 
-                      {visibleEntries.map((item, i) => (
-                        <div
-                          key={i}
-                          className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300 ml-4"
-                        >
-                          <div className="text-sm text-gray-500">
-                            {item.date} – {item.shares} shares @ ${item.price} ➝{" "}
-                            {item.value}
+                        {visibleEntries.map((item, i) => (
+                          <div
+                            key={i}
+                            className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300 ml-4"
+                          >
+                            <div className="text-sm text-gray-500">
+                              {item.date} – {item.shares} shares @ ${item.price}{" "}
+                              ➝ {item.value}
+                            </div>
+                            <div className="italic">{item.comment}</div>
                           </div>
-                          <div className="italic">{item.comment}</div>
-                        </div>
-                      ))}
+                        ))}
 
-                      {hasMore && (
-                        <button
-                          type="button"
-                          onClick={() => toggleReasonExpand(key)}
-                          className="text-sm text-blue-600 underline mt-1 ml-4"
+                        {hasMore && (
+                          <button
+                            type="button"
+                            onClick={() => toggleReasonExpand(key)}
+                            className="text-sm text-blue-600 underline mt-1 ml-4"
+                          >
+                            {isExpanded ? "Show Less" : "See More"}
+                          </button>
+                        )}
+
+                        <select
+                          value={form.checklistReview[key] || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              checklistReview: {
+                                ...prev.checklistReview,
+                                [key]: e.target.value,
+                              },
+                            }))
+                          }
+                          className="w-full p-1.5 mt-2 border border-gray-300 rounded"
                         >
-                          {isExpanded ? "Show Less" : "See More"}
-                        </button>
-                      )}
-
-                      <select
-                        value={checklistReview[key] || ""}
-                        onChange={(e) =>
-                          setChecklistReview((prev) => ({
-                            ...prev,
-                            [key]: e.target.value,
-                          }))
-                        }
-                        className="w-full p-1.5 mt-2 border border-gray-300 rounded"
-                      >
-                        <option value="">Review your judgment</option>
-                        <option value="positive">Helped the Trade</option>
-                        <option value="neutral">Didn’t Matter</option>
-                        <option value="negative">Shouldn’t have relied</option>
-                      </select>
-                    </div>
-                  );
-                })}
+                          <option value="">Review your judgment</option>
+                          <option value="positive">Helped the Trade</option>
+                          <option value="neutral">Didn’t Matter</option>
+                          <option value="negative">
+                            Shouldn’t have relied
+                          </option>
+                        </select>
+                      </div>
+                    );
+                  }
+                )}
               </div>
             </div>
           )}
@@ -508,8 +522,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </span>
             <textarea
               rows={3}
-              value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
+              value={form.reflection}
+              name="reflection"
+              onChange={handleChange}
               className="w-full p-2 border rounded"
               placeholder="What did you learn from this trade?"
             />
@@ -521,8 +536,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </span>
             <input
               type="url"
-              value={chartLink}
-              onChange={(e) => setChartLink(e.target.value)}
+              value={form.chartLink}
+              name="chartLink"
+              onChange={handleChange}
               className="w-full p-2 border rounded"
               placeholder="e.g. TradingView link"
             />
@@ -534,8 +550,9 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </span>
             <input
               type="text"
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
+              value={form.tags}
+              name="tags"
+              onChange={handleChange}
               className="w-full p-2 border rounded"
               placeholder="e.g. breakout, emotional, earnings"
             />
