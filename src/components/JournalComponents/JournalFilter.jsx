@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import TickerSearchInput from "../TickerSearchInput"
+import TickerSearchInput from "../TickerSearchInput";
+
 export default function JournalFilter({
   filters,
   onChange,
@@ -15,6 +16,7 @@ export default function JournalFilter({
     if (
       !filters.ticker.trim() &&
       !filters.type &&
+      !filters.direction &&
       !filters.fromDate &&
       !filters.toDate
     ) {
@@ -28,6 +30,7 @@ export default function JournalFilter({
   const handleClear = () => {
     onChange("ticker", "");
     onChange("type", "");
+    onChange("direction", "");
     onChange("fromDate", "");
     onChange("toDate", "");
     onClearFilter();
@@ -50,7 +53,6 @@ export default function JournalFilter({
         transition={{ duration: 0.3, ease: "easeOut" }}
         className="w-full space-y-3 bg-[var(--color-dark-background)] mb-4 rounded-lg"
       >
-        {/* Toggle Button */}
         <button
           onClick={() => setOpen(!open)}
           className="w-full flex items-center justify-between px-4 py-3 mb-0 font-medium"
@@ -63,15 +65,10 @@ export default function JournalFilter({
             exit={{ opacity: 0, y: 2 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            {open ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
+            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </motion.div>
         </button>
 
-        {/* Filter Form (Collapsible) */}
         <AnimatePresence initial={false}>
           {open && (
             <motion.div
@@ -89,7 +86,7 @@ export default function JournalFilter({
                 }}
                 className="p-4 space-y-4"
               >
-                {/* Ticker Name - replaced with TickerSearchInput */}
+                {/* Ticker Name */}
                 <div>
                   <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
                     Ticker
@@ -114,6 +111,22 @@ export default function JournalFilter({
                     <option value="">All Types</option>
                     <option value="buy">Buy</option>
                     <option value="sell">Sell</option>
+                  </select>
+                </div>
+
+                {/* Direction Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
+                    Direction
+                  </label>
+                  <select
+                    value={filters.direction}
+                    onChange={(e) => onChange("direction", e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
+                  >
+                    <option value="">All Directions</option>
+                    <option value="long">Long</option>
+                    <option value="short">Short</option>
                   </select>
                 </div>
 
@@ -142,11 +155,7 @@ export default function JournalFilter({
                   type="submit"
                   whileHover={{ scale: 0.98 }}
                   whileTap={{ scale: 1.02 }}
-                  transition={{
-                    type: "tween",
-                    ease: "easeOut",
-                    duration: 0.15,
-                  }}
+                  transition={{ type: "tween", ease: "easeOut", duration: 0.15 }}
                   className="mt-2 w-full bg-[var(--color-text)] text-white py-2 rounded-md text-sm font-medium hover:opacity-80"
                 >
                   Apply Filter
