@@ -1,8 +1,13 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-export default function JournalFilter({ filters, onChange, onSubmit, onClearFilter }) {
+import TickerSearchInput from "../TickerSearchInput"
+export default function JournalFilter({
+  filters,
+  onChange,
+  onSubmit,
+  onClearFilter,
+}) {
   const [open, setOpen] = useState(false);
   const [filterApplied, setFilterApplied] = useState(false);
 
@@ -84,17 +89,15 @@ export default function JournalFilter({ filters, onChange, onSubmit, onClearFilt
                 }}
                 className="p-4 space-y-4"
               >
-                {/* Ticker Name */}
+                {/* Ticker Name - replaced with TickerSearchInput */}
                 <div>
                   <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
                     Ticker
                   </label>
-                  <input
-                    type="text"
-                    value={filters.ticker}
-                    onChange={(e) => onChange("ticker", e.target.value)}
-                    placeholder="e.g. AAPL"
-                    className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
+                  <TickerSearchInput
+                    styling="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
+                    form={{ ticker: filters.ticker }}
+                    onSelect={(ticker) => onChange("ticker", ticker)}
                   />
                 </div>
 
