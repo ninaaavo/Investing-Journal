@@ -161,6 +161,7 @@ export default function InputForm() {
         ...form,
         moodLog: updatedMoodLog,
         journalType: adjustedJournalType,
+        isEntry:true,
         createdAt: serverTimestamp(),
       };
 

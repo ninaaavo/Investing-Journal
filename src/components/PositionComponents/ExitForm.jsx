@@ -114,6 +114,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       createdAt: serverTimestamp(),
       journalType: stock.direction === "long" ? "sell" : "buy",
       direction: stock.direction,
+      isEntry:false,
     };
 
     try {
