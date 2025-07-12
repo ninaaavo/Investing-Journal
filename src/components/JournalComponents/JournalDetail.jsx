@@ -1,119 +1,25 @@
 import { motion } from "framer-motion";
-import { useState } from "react";
 import BuyJournalSummary from "./BuyJournalSummary";
-import CheckCard from "./CheckCard";
 import ReasonJournalCard from "./ReasonJournalCard";
-import MoodTimelineCard from "./MoodTimelineCard";
 import GenericTimelineCard from "./GenericTimelineCard";
-import { Check } from "lucide-react";
-import ExitDecisionCard from "./InfoCard";
-import SellReasonReviewCard from "./SellReasonReviewCard";
 import InfoCard from "./InfoCard";
+import SellReasonReviewCard from "./SellReasonReviewCard";
 import SellEvaluationCard from "./SellEvaluationCard";
+import { useState, useEffect } from "react";
+
 export default function JournalDetail({ selected, isEntry = false }) {
-  const [moodLogs, setMoodLogs] = useState([
-    {
-      label: "😊 Calm",
-      content:
-        "This trade feels steady — my plan is clear, and the risk is managed.",
-      timestamp: "2025-06-24T14:20:00Z",
-    },
-    {
-      label: "😰 Anxious",
-      content: "I wasn’t sure about the market open — it felt volatile.",
-      timestamp: "2025-06-24T13:00:00Z",
-    },
-  ]);
-  const [expectLogs, setExpectLogs] = useState([
-    {
-      content:
-        "I expect the stock to bounce off the support level and trend upward within a week.",
-      timestamp: "2025-06-20T09:30:00Z",
-    },
-    {
-      content: "Possibly a short-term breakout after earnings next Tuesday.",
-      timestamp: "2025-06-22T13:15:00Z",
-    },
-    {
-      content:
-        "Market sentiment is recovering, could see a 5% climb over the next 10 days.",
-      timestamp: "2025-06-23T10:05:00Z",
-    },
-    {
-      content:
-        "Momentum is slowing down; I think it will consolidate for a while.",
-      timestamp: "2025-06-24T16:45:00Z",
-    },
-    {
-      content:
-        "If it holds above the moving average, I’ll expect an uptrend by end of the week.",
-      timestamp: "2025-06-25T08:55:00Z",
-    },
-  ]);
-  const sampleExitEntry = {
-    stopLoss: "182",
-    lossPercent: "-2.5%",
-    reason:
-      "Placed just under the rising trendline to avoid fakeouts and preserve capital.",
-    targetPrice: "195",
-    rrRatio: "2.6",
-    timestamp: "2025-06-25T10:45:00Z",
-  };
+  const [sellEvaluation, setSellEvaluation] = useState(selected?.sellEvaluation || {});
 
-  const checklist = {
-    "Graph pattern": {
-      value: "positive",
-      comment: "Double bottoms near support zone",
-      weight: 4,
-    },
-    "Candle pattern": {
-      value: "positive",
-      comment: "3 white soldiers after consolidation",
-      weight: 2,
-    },
-    "Key level": {
-      value: "negative",
-      comment: "Resistance zone around 125",
-      weight: 1,
-    },
-    EMA50: {
-      value: "neutral",
-      comment: "Price hovering slightly above",
-      weight: 1,
-    },
-    RSI: {
-      value: "neutral",
-      comment: "Near 50 — no clear signal",
-      weight: 1,
-    },
-    "Volume spike": {
-      value: "positive",
-      comment: "Unusual high volume on green candle",
-      weight: 3,
-    },
-    "News sentiment": {
-      value: "negative",
-      comment: "Market uncertainty due to earnings report",
-      weight: 2,
-    },
-  };
-
-  const [journalDetail, setJournalDetail] = useState(null);
+  useEffect(() => {
+    setSellEvaluation(selected?.sellEvaluation || {});
+  }, [selected]);
 
   const handleSellEvaluationChange = (newEvaluation) => {
-    setJournalDetail((prev) => ({
-      ...prev,
-      sellEvaluation: newEvaluation,
-    }));
+    setSellEvaluation(newEvaluation);
   };
+  console.log("im journal detail, got selected", selected)
+  if (!selected) return null;
 
-  const sellEvaluation = {
-    rating: "⭐⭐⭐",
-    outcome: "Price rebounded and kept going",
-    repeatDecision: "No",
-    reflection:
-      "Sold on emotion and missed the bounce. Next time, wait for candle confirmation.",
-  };
   return (
     <motion.div
       initial={{ x: 10, opacity: 0 }}
@@ -132,17 +38,21 @@ export default function JournalDetail({ selected, isEntry = false }) {
           <BuyJournalSummary
             name={selected.stock}
             ticker={selected.ticker}
-            shares={10}
-            buyPrice={150}
-            currentPrice={175}
-            date={"12:05 pm - May 23, 2025"}
+            shares={selected.shares}
+            buyPrice={selected.entryPrice}
+            currentPrice={selected.currentPrice}
+            date={selected.entryDate}
           />
 
-          <ReasonJournalCard checklist={checklist} useWeightedScoring={true} />
+          <ReasonJournalCard
+            checklist={selected.checklist || {}}
+            useWeightedScoring
+          />
+
           <GenericTimelineCard
             title="Mood Log"
-            entries={moodLogs}
-            onAddEntry={(entry) => setMoodLogs([entry, ...moodLogs])}
+            entries={selected.moodLogs || []}
+            onAddEntry={() => {}}
             showEmojiPicker={true}
             hasLabel={true}
             renderHeader={(entry) => entry.label}
@@ -152,8 +62,8 @@ export default function JournalDetail({ selected, isEntry = false }) {
 
           <GenericTimelineCard
             title="Future Expectation"
-            entries={expectLogs}
-            onAddEntry={(entry) => setExpectLogs([entry, ...expectLogs])}
+            entries={selected.expectations || []}
+            onAddEntry={() => {}}
             showEmojiPicker={false}
             hasLabel={false}
             renderHeader={(entry) => entry.label}
@@ -161,88 +71,39 @@ export default function JournalDetail({ selected, isEntry = false }) {
             renderContent={(entry) => entry.content}
           />
 
-          <InfoCard
-            title="Exit Plan"
-            entry={[
-              {
-                label: "Stop Loss",
-                content:
-                  "55.00 (-8.5%)\nReason: Weak support and reversal pattern",
-              },
-              {
-                label: "Target Price",
-                content: "70.00 (+15.0%)",
-              },
-              {
-                label: "R/R Ratio",
-                content: "1.76",
-              },
-            ]}
-          />
+          <InfoCard title="Exit Plan" entry={selected.exitPlan || []} />
         </div>
       ) : (
         <div className="flex flex-wrap gap-[2%] w-full">
           <BuyJournalSummary
             name={selected.stock}
             ticker={selected.ticker}
-            shares={10}
-            buyPrice={150}
-            currentPrice={175}
-            date={"12:05 pm - May 23, 2025"}
+            shares={selected.shares}
+            buyPrice={selected.entryPrice||selected.exitPrice}
+            currentPrice={selected.currentPrice}
+            date={selected.entryDate||selected.exitDate}
           />
 
           <SellReasonReviewCard
-            checklistReview={{
-              "Graph pattern": "positive",
-              Volume: "negative",
-              RSI: "neutral",
-              "EMA alignment": "neutral",
-              "News sentiment": "neutral",
-            }}
-            checklist={{
-              "Graph pattern": { comment: "Double bottoms near support zone" },
-              Volume: { comment: "Volume surge at breakout" },
-              RSI: { comment: "RSI was mid-level, not too overbought" },
-              "EMA alignment": { comment: "Price was above 50 EMA" },
-              "News sentiment": {
-                comment: "Mixed news around earnings report",
-              },
-            }}
+            checklistReview={selected.checklistReview || {}}
+            checklist={selected.checklist || {}}
           />
 
-          <InfoCard
-            title="Exit Summary"
-            entry={[
-              {
-                label: "Reason for Exit",
-                content: "Hit stop loss",
-              },
-              {
-                label: "Original Expectations",
-                content: "Push up to $210",
-              },
-              {
-                label: "Trade go according to plan",
-                content: "Partially",
-              },
-            ]}
-          />
+          <InfoCard title="Exit Summary" entry={selected.exitSummary || []} />
+
           <InfoCard
             title="Trade Reflection"
-            entry={[
-              {
-                content:
-                  "I entered with a clear plan but didn't fully respect my stop loss discipline. Watching the price action too closely made me hesitate, and I let emotions creep in. Going forward, I need to trust the plan and reduce screen time after setting alerts.",
-              },
-            ]}
+            entry={
+              selected.tradeReflection
+                ? [{ content: selected.tradeReflection }]
+                : []
+            }
           />
 
-          
-            <SellEvaluationCard
-              initialData={sellEvaluation || {}}
-              onChange={handleSellEvaluationChange}
-            />
-          
+          <SellEvaluationCard
+            initialData={sellEvaluation}
+            onChange={handleSellEvaluationChange}
+          />
         </div>
       )}
     </motion.div>

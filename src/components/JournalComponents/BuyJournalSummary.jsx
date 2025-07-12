@@ -7,12 +7,13 @@ export default function BuyJournalSummary({
   sharesSold,
   buyPrice,
   avgSoldPrice,
-  currentPrice,
+  currentPrice=100,
   date,
 }) {
   const change = (currentPrice - buyPrice) * shares;
   const percentChange = ((currentPrice - buyPrice) / buyPrice) * 100;
   const isGain = change >= 0;
+  console.log("im buy journal sum, i got buy price", buyPrice )
 
   return (
     <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">

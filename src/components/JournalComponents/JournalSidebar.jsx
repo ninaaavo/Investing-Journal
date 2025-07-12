@@ -96,7 +96,7 @@ export default function JournalSidebar({
           else if (!isBuy && !isShort)
             tagClasses += "bg-red-100 text-red-800"; // Sell
           else tagClasses += "bg-orange-100 text-orange-800"; // Sell – Short
-
+      console.log("your entry", entry)
           return (
             <li
               key={entry.id}
@@ -110,7 +110,16 @@ export default function JournalSidebar({
               <div>
                 <div className="font-medium text-text">{entry.ticker}</div>
                 <div className="text-sm text-gray-500">
-                  {new Date(entry.date).toLocaleDateString("en-US")}
+                  {(() => {
+                    const d = new Date(entry.date);
+                    return `${String(d.getMonth() + 1).padStart(
+                      2,
+                      "0"
+                    )}/${String(d.getDate()).padStart(
+                      2,
+                      "0"
+                    )}/${d.getFullYear()}`;
+                  })()}{" "}
                 </div>{" "}
               </div>
               <span className={tagClasses}>{label}</span>
