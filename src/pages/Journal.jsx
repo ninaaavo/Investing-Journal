@@ -3,8 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import JournalSidebar from "../components/JournalComponents/JournalSidebar";
 import JournalDetail from "../components/JournalComponents/JournalDetail";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase"; // adjust path as needed
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db, auth } from "../firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  doc,
+  updateDoc,
+  arrayUnion,
+} from "firebase/firestore";
 
 export default function Journal() {
   const [entries, setEntries] = useState([]);
@@ -33,7 +41,7 @@ export default function Journal() {
         stock: entry.companyName || entry.ticker || "Unknown",
         ticker: entry.ticker,
         type: entry.journalType,
-        date: entry.entryDate || entry.exitDate ,
+        date: entry.entryDate || entry.exitDate,
         ...entry,
       }));
 
@@ -43,6 +51,29 @@ export default function Journal() {
 
     fetchEntries();
   }, []);
+
+  const handleAddEntry = async (entry, field) => {
+    console.log("im adding entry", entry, "to", field)
+    const user = auth.currentUser;
+    if (!user || !selected?.id) return;
+
+    try {
+      const docRef = doc(db, "users", user.uid, "journalEntries", selected.id);
+
+      // Optimistically update local state
+      setSelected((prev) => ({
+        ...prev,
+        [field]: [...(prev?.[field] || []), entry],
+      }));
+
+      await updateDoc(docRef, {
+        [field]: arrayUnion(entry),
+      });
+    } catch (err) {
+      console.error(`Failed to add ${field} entry:`, err);
+      alert("Failed to save entry.");
+    }
+  };
 
   return (
     <motion.div
@@ -72,7 +103,13 @@ export default function Journal() {
         className="overflow-y-auto overflow-x-hidden relative"
       >
         <AnimatePresence mode="wait" initial={false}>
-          {selected && <JournalDetail key={selected.id} selected={selected} isEntry={(selected.direction==="long" && selected.journalType==="buy") || (selected.direction==="short" && selected.journalType==="sell")}/>}
+          {selected && (
+            <JournalDetail
+              key={selected.id}
+              selected={selected}
+              onAddEntry={handleAddEntry}
+            />
+          )}
         </AnimatePresence>
 
         {formSell && (

@@ -96,7 +96,6 @@ export default function JournalSidebar({
           else if (!isBuy && !isShort)
             tagClasses += "bg-red-100 text-red-800"; // Sell
           else tagClasses += "bg-orange-100 text-orange-800"; // Sell – Short
-      console.log("your entry", entry)
           return (
             <li
               key={entry.id}
@@ -111,15 +110,33 @@ export default function JournalSidebar({
                 <div className="font-medium text-text">{entry.ticker}</div>
                 <div className="text-sm text-gray-500">
                   {(() => {
-                    const d = new Date(entry.date);
-                    return `${String(d.getMonth() + 1).padStart(
-                      2,
-                      "0"
-                    )}/${String(d.getDate()).padStart(
-                      2,
-                      "0"
-                    )}/${d.getFullYear()}`;
-                  })()}{" "}
+                    const rawDate = entry.isEntry
+                      ? entry.entryTimestamp
+                      : entry.exitTimestamp;
+
+                    const timeProvided = entry.isEntry
+                      ? entry.timeProvided
+                      : entry.exitTimeProvided;
+
+                    const d =
+                      rawDate instanceof Date ? rawDate : rawDate?.toDate?.();
+
+                    if (!d) return "";
+
+                    const mm = String(d.getMonth() + 1).padStart(2, "0");
+                    const dd = String(d.getDate()).padStart(2, "0");
+                    const yyyy = d.getFullYear();
+
+                    if (timeProvided) {
+                      let hour = d.getHours();
+                      const minute = String(d.getMinutes()).padStart(2, "0");
+                      const ampm = hour >= 12 ? "PM" : "AM";
+                      hour = hour % 12 || 12;
+                      return `${mm}/${dd}/${yyyy} at ${hour}:${minute} ${ampm}`;
+                    } else {
+                      return `${mm}/${dd}/${yyyy}`;
+                    }
+                  })()}
                 </div>{" "}
               </div>
               <span className={tagClasses}>{label}</span>

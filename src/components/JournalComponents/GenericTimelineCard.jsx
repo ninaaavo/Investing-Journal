@@ -2,6 +2,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X } from "lucide-react";
 import EmojiSelector from "./EmojiSelector";
+import { Timestamp } from "firebase/firestore";
+
 
 export default function GenericTimelineCard({
   title = "Log",
@@ -9,28 +11,33 @@ export default function GenericTimelineCard({
   onAddEntry,
   showEmojiPicker = false,
   hasLabel = false,
-  renderHeader = (entry) => entry.label,
+  field,
+  renderHeader = (entry) => {
+    return entry.emoji + "hi" + entry.label;
+  },
   renderContent = (entry) => entry.content,
 }) {
   const [newLabel, setNewLabel] = useState("");
   const [newContent, setNewContent] = useState("");
   const [emoji, setEmoji] = useState("😊");
   const [showInput, setShowInput] = useState(false);
-
   const handleSubmit = () => {
     if (newContent) {
       onAddEntry({
-        label: showEmojiPicker ? `${emoji} ${newLabel}` : newLabel,
+        emoji: showEmojiPicker ? emoji : "",
+        label: newLabel,
         content: newContent,
-        timestamp: new Date().toISOString(),
-      });
+        timestamp: Timestamp.fromDate(new Date()),
+        timeProvided: true,
+      }, field);
+
       setNewLabel("");
       setNewContent("");
       setEmoji("😊");
       setShowInput(false);
     }
   };
-
+  console.log("im", title, "i got", entries);
   return (
     <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)] h-[300px] overflow-y-auto scroll-stable">
       <div className="flex items-center justify-between mb-4">
@@ -39,7 +46,15 @@ export default function GenericTimelineCard({
           className="text-blue-600 text-sm hover:underline flex items-center gap-1"
           onClick={() => setShowInput((prev) => !prev)}
         >
-          {showInput ? <><X className="w-4 h-4" /> Cancel</> : <><Plus className="w-4 h-4" /> Add</>}
+          {showInput ? (
+            <>
+              <X className="w-4 h-4" /> Cancel
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4" /> Add
+            </>
+          )}
         </button>
       </div>
 
@@ -62,13 +77,17 @@ export default function GenericTimelineCard({
                   />
                 </div>
               )}
-              {hasLabel && <input
-                type="text"
-                className={`w-full border border-gray-300 rounded-md px-3 ${showEmojiPicker ? 'pl-9' : ''} py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300`}
-                placeholder="Label (e.g., Calm)"
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
-              />}
+              {hasLabel && (
+                <input
+                  type="text"
+                  className={`w-full border border-gray-300 rounded-md px-3 ${
+                    showEmojiPicker ? "pl-9" : ""
+                  } py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300`}
+                  placeholder="Label (e.g., Calm)"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                />
+              )}
             </div>
             <textarea
               className="w-full border border-gray-300 rounded-md px-3 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
@@ -79,7 +98,7 @@ export default function GenericTimelineCard({
             />
             <div className="flex gap-2">
               <button
-                className="text-sm bg-primary text-white px-3 py-1 rounded hover:opacity-90"
+                className="text-sm bg-primary px-3 py-1 rounded hover:opacity-90"
                 onClick={handleSubmit}
               >
                 Submit
@@ -103,9 +122,34 @@ export default function GenericTimelineCard({
             {entries.length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center justify-between text-lg font-medium text-primary">
-                  {renderHeader(entries[0])}
+                  {entries[0].emoji}{" "}
+                  {entries[0].label &&
+                    entries[0].label.charAt(0).toUpperCase() +
+                      entries[0].label.slice(1)}
                   <span className="text-sm text-gray-400">
-                    {new Date(entries[0].timestamp).toLocaleTimeString()}
+                    {(() => {
+                      const entry = entries[0];
+                      const d = entry?.timestamp?.toDate?.();
+
+                      if (!d) return "";
+
+                      if (entry.timeProvided) {
+                        return d.toLocaleString("en-US", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                          month: "2-digit",
+                          day: "2-digit",
+                          year: "2-digit",
+                        });
+                      } else {
+                        return d.toLocaleDateString("en-US", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          year: "2-digit",
+                        });
+                      }
+                    })()}
                   </span>
                 </div>
                 <p className="text-sm text-[var(--color-text)] leading-snug mt-1">
@@ -120,7 +164,15 @@ export default function GenericTimelineCard({
                   <div className="flex items-center justify-between font-medium">
                     {renderHeader(entry)}
                     <span className="text-xs text-gray-400">
-                      {new Date(entry.timestamp).toLocaleTimeString()}
+                      {(() => {
+                        const d = entry.timestamp?.toDate?.();
+                        if (!d || !entry.timeProvided) return "";
+                        return d.toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        });
+                      })()}
                     </span>
                   </div>
                   <p className="text-gray-600 text-sm mt-0.5">

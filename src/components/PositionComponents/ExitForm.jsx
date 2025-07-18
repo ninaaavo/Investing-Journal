@@ -1,3 +1,4 @@
+// ExitFormUpdated.jsx
 import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { db, auth } from "../../firebase";
@@ -48,6 +49,8 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     expectations: [],
   });
 
+  console.log("exit form got", form);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -62,6 +65,13 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const handleReviewClick = (choice) => {
+    setShowReviewPrompt(false);
+    if (choice === "yes") {
+      window.location.href = `/journal?ticker=${stock.ticker}&type=Sell`;
+    }
   };
 
   const pAndL = useMemo(() => {
@@ -87,12 +97,13 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
   ]);
 
   const tradeDuration = useMemo(() => {
-    if (!stock.entryDate || !form.exitDate) return null;
-    const entry = new Date(stock.entryDate);
+    if (!stock.createdAt || !form.exitDate) return null;
+    const entry = stock.createdAt.toDate?.();
     const exit = new Date(form.exitDate);
+    if (!entry || isNaN(exit)) return null;
     const diff = Math.round((exit - entry) / (1000 * 60 * 60 * 24));
     return diff >= 0 ? diff : null;
-  }, [stock.entryDate, form.exitDate]);
+  }, [stock.createdAt, form.exitDate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -114,7 +125,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       createdAt: serverTimestamp(),
       journalType: stock.direction === "long" ? "sell" : "buy",
       direction: stock.direction,
-      isEntry:false,
+      isEntry: false,
     };
 
     try {
@@ -181,19 +192,24 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       const expectationArr = [];
       for (const entry of activeEntries) {
         for (const [key, value] of Object.entries(entry.checklist)) {
+          console.log("ur entry", entry)
           if (!merged[key]) merged[key] = [];
           merged[key].push({
-            date: entry.entryDate || "Unknown",
+            timestamp:entry.entryTimestamp,
+            timeProvided:entry.timeProvided,
             shares: entry.usedShares,
             price: entry.entryPrice,
             value: value.value,
             comment: value.comment,
           });
+          
         }
+        console.log("ur merged", merged)
         if (entry.expectations) {
           expectationArr.push({
             id: entry.id,
-            date: entry.entryDate || "Unknown",
+            timestamp:entry.timestamp,
+            timeProvided:entry.timeProvided,
             shares: entry.usedShares,
             price: entry.entryPrice,
             expectation: entry.expectations,
@@ -209,13 +225,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       fetchChecklist();
     }
   }, [stock, form.shares]);
-
-  const handleReviewClick = (choice) => {
-    setShowReviewPrompt(false);
-    if (choice === "yes") {
-      window.location.href = `/journal?ticker=${stock.ticker}&type=Sell`;
-    }
-  };
 
   return (
     <motion.form
@@ -394,57 +403,69 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             </label>
           )}
 
-          {Array.isArray(form.expectations) && form.expectations.length > 0 && (
-            <label className="block pt-4 pb-10 border-b border-gray-300">
-              <span className="block mb-1 font-medium text-lg">
-                Original Expectations
-              </span>
+          {Array.isArray(stock.expectations) &&
+            stock.expectations.length > 0 && (
+              <label className="block pt-4 pb-10 border-b border-gray-300">
+                <span className="block mb-1 font-medium text-lg">
+                  Original Expectations
+                </span>
 
-              <div className="space-y-2 mb-4 pl-4">
-                {(showAllExpectations
-                  ? form.expectations
-                  : [form.expectations[0]]
-                ).map((exp, idx) => (
-                  <div
-                    key={exp.id || idx}
-                    className="text-gray-700 italic border-l-4 border-gray-400 pl-3 py-1"
-                  >
-                    <p className="mb-1">“{exp.expectation}”</p>
-                    <p className="text-xs text-gray-500">
-                      {exp.date ? `Date: ${exp.date}` : ""}{" "}
-                      {exp.shares ? `| Shares: ${exp.shares}` : ""}{" "}
-                      {exp.price ? `| Price: $${exp.price}` : ""}
-                    </p>
-                  </div>
-                ))}
+                <div className="space-y-2 mb-4">
+                  {(showAllExpectations
+                    ? stock.expectations
+                    : [stock.expectations[0]]
+                  ).map((exp, idx) => {
+                    return (
+                      <div
+                        key={idx}
+                        className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300 ml-4"
+                      >
+                        <p className="mb-1">“{exp.content}”</p>
+                        <p className="text-xs text-gray-500">
+                          {exp.timestamp
+                            ? exp.timestamp.toDate().toLocaleString("en-US", {
+                                month: "2-digit",
+                                day: "2-digit",
+                                year: "2-digit",
+                                ...(exp.timeProvided && {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                }),
+                              })
+                            : ""}
+                        </p>
+                      </div>
+                    );
+                  })}
 
-                {form.expectations.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllExpectations((prev) => !prev)}
-                    className="text-sm text-blue-600 underline mt-1"
-                  >
-                    {showAllExpectations ? "Show Less" : "See More"}
-                  </button>
-                )}
-              </div>
+                  {stock.expectations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllExpectations((prev) => !prev)}
+                      className="text-sm text-blue-600 underline mt-1 ml-4"
+                    >
+                      {showAllExpectations ? "Show Less" : "See More"}
+                    </button>
+                  )}
+                </div>
 
-              <span className="block mb-1 font-medium">
-                Did this trade go according to plan?
-              </span>
-              <select
-                value={form.followedPlan}
-                name="followedPlan"
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-              >
-                <option value="">Select</option>
-                <option value="yes">Yes</option>
-                <option value="partial">Partially</option>
-                <option value="no">No</option>
-              </select>
-            </label>
-          )}
+                <span className="block mb-1 font-medium">
+                  Did this trade go according to plan?
+                </span>
+                <select
+                  value={form.followedPlan}
+                  name="followedPlan"
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">Select</option>
+                  <option value="yes">Yes</option>
+                  <option value="partial">Partially</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+            )}
 
           {Object.keys(form.entryChecklistMap).length > 0 && (
             <div className="pt-4 pb-10 border-b border-gray-300">
@@ -461,7 +482,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                       ? entries
                       : entries.slice(0, 1);
                     const hasMore = entries.length > 1;
-
+                    console.log("exit form for trade review", entries);
                     return (
                       <div key={key}>
                         <div className="font-medium mb-1">{key}</div>
@@ -471,11 +492,23 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                             key={i}
                             className="text-gray-700 border-l-2 pl-3 mb-1 border-gray-300 ml-4"
                           >
-                            <div className="text-sm text-gray-500">
-                              {item.date} – {item.shares} shares @ ${item.price}{" "}
+                            <div className="italic">{item.comment}</div>
+
+                            <div className="text-xs text-gray-500">
+                              {item.timestamp
+                            ? item.timestamp.toDate().toLocaleString("en-US", {
+                                month: "2-digit",
+                                day: "2-digit",
+                                year: "2-digit",
+                                ...(item.timeProvided && {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: true,
+                                }),
+                              })
+                            : ""} – {item.shares} shares @ ${item.price}{" "}
                               ➝ {item.value}
                             </div>
-                            <div className="italic">{item.comment}</div>
                           </div>
                         ))}
 

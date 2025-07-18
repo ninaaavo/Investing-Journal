@@ -10,10 +10,15 @@ export default function BuyJournalSummary({
   currentPrice=100,
   date,
 }) {
+  buyPrice=parseFloat(buyPrice);
+  avgSoldPrice=parseFloat(avgSoldPrice);
+  currentPrice=parseFloat(currentPrice);
+  shares=parseFloat(shares);
   const change = (currentPrice - buyPrice) * shares;
   const percentChange = ((currentPrice - buyPrice) / buyPrice) * 100;
   const isGain = change >= 0;
   console.log("im buy journal sum, i got buy price", buyPrice )
+  console.log("type of buy price", typeof(buyPrice))
 
   return (
     <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">

@@ -40,59 +40,71 @@ export default function Positions() {
   }, [user?.uid]);
 
   // Fetch all journal entries and group them by ticker+direction
-useEffect(() => {
-  if (!user?.uid) return;
+  useEffect(() => {
+    if (!user?.uid) return;
 
-  const q = query(
-    collection(db, "users", user.uid, "journalEntries"), 
-    orderBy("createdAt", "asc")
-  );
+    const q = query(
+      collection(db, "users", user.uid, "journalEntries"),
+      orderBy("createdAt", "asc")
+    );
 
-  const unsubscribe = onSnapshot(q, (snapshot) => {
-    const map = {};
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const map = {};
 
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-      const ticker = data?.ticker;
-      const direction = data?.direction;
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const ticker = data?.ticker;
+        const direction = data?.direction;
 
-      if (!ticker || !direction) return;
+        if (!ticker || !direction) return;
 
-      const key = `${ticker}_${direction}`;
-      if (!map[key]) map[key] = [];
+        const key = `${ticker}_${direction}`;
+        if (!map[key]) map[key] = [];
 
-      map[key].push({ id: docSnap.id, ...data });
+        map[key].push({ id: docSnap.id, ...data });
+      });
+
+      setJournalMap(map);
     });
 
-    setJournalMap(map);
-  });
-
-  return () => unsubscribe();
-}, [user?.uid]);
-
-
+    return () => unsubscribe();
+  }, [user?.uid]);
 
   const handleExitClick = (stock) => {
     const key = `${stock.ticker}_${stock.direction}`;
     const entries = journalMap[key] || [];
-    console.log("Your stocks are", stock);
+
     const matchingBuys = entries.filter((entry) => entry.journalType === "buy");
-    const mostRecentBuy = matchingBuys.at(-1);
-    const expectationText = mostRecentBuy?.expectations || "";
-    const totalShares = stock.shares;
-    const averagePrice = stock.averagePrice;
-    const entryDate = mostRecentBuy?.entryDate || "";
+
+    // Collect all expectations across all buy entries
+    const allFormattedExpectations = [];
+
+    matchingBuys.forEach((entry) => {
+      const raw = entry.expectations || [];
+      raw.forEach((exp) => {
+        // Handle string or object style expectations
+        allFormattedExpectations.push(exp);
+      });
+    });
+
+    allFormattedExpectations.sort((a, b) => {
+      const timeA = a.timestamp?.toDate?.().getTime?.() || 0;
+      const timeB = b.timestamp?.toDate?.().getTime?.() || 0;
+      return timeA - timeB;
+    });
 
     setSelectedStock({
       ...stock,
-      expectations: expectationText,
-      availableShares: totalShares,
-      averagePriceFromFIFO: averagePrice,
-      entryDate,
+      expectations: allFormattedExpectations,
+      availableShares: stock.shares,
+      averagePriceFromFIFO: stock.averagePrice,
+      entryDate: matchingBuys.at(-1)?.entryDate || "",
     });
+
     setShowExitForm(true);
   };
 
+  console.log("ur expectationtext", selectedStock);
   const sampleChecklist = {
     "Graph pattern": {
       value: "positive",
@@ -138,7 +150,7 @@ useEffect(() => {
           <ExitForm
             onSubmit={() => setShowExitForm(false)}
             onClose={() => setShowExitForm(false)}
-            stock ={selectedStock}
+            stock={selectedStock}
             pastChecklist={sampleChecklist}
           />
         ) : (

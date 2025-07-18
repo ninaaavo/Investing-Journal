@@ -16,11 +16,17 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
     left: anchorRect.left + anchorRect.width / 2,
     transform: "translateX(-50%)",
   };
-  const formatEntryDate = (dateString) => {
-    if (!dateString) return "";
-    const [year, month, day] = dateString.split("-");
-    return `${month}/${day}/${year}`;
-  };
+const formatDateOnly = (timestamp) => {
+  const date = timestamp instanceof Date ? timestamp : timestamp?.toDate?.();
+  if (!date) return "";
+
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const yy = String(date.getFullYear()).slice(-2);
+
+  return `${mm}/${dd}/${yy}`;
+};
+
 
   console.log("This is hover card my entries are", entries);
 
@@ -71,7 +77,7 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                 >
                   {isExpanded ? "▾" : "▸"}{" "}
                   <span className=" hover:underline">
-                    {formatEntryDate(isEntry ? entry.entryDate : entry.exitDate)}:{" "}
+                    {formatDateOnly(isEntry ? entry.entryTimestamp : entry.exitTimestamp)}:{" "}
                     {entry.journalType.charAt(0).toUpperCase() +
                       entry.journalType.slice(1)}{" "}
                     {entry.shares} shares at $
@@ -93,10 +99,10 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           {entry.reason}
                         </div>
                       )}
-                      {entry.exitReason && (
+                      {entry.exitPlan && (
                         <div>
-                          <span className="font-medium">Exit Reason:</span>{" "}
-                          {entry.exitReason}
+                          <span className="font-medium">Exit Plan:</span>{" "}
+                          {entry.exitPlan.reason}
                         </div>
                       )}
                       {entry.pAndL && (
@@ -117,7 +123,7 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                       {entry.expectations && (
                         <div>
                           <span className="font-medium">Expectations:</span>{" "}
-                          {entry.expectations}
+                          {entry.expectations[entry.expectations.length-1].content}
                         </div>
                       )}
                       {entry.strategyFit && (
@@ -126,16 +132,10 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           {entry.strategyFit}
                         </div>
                       )}
-                      {entry.mood && (
+                      {entry.moodLog && (
                         <div>
                           <span className="font-medium">Mood:</span>{" "}
-                          {entry.mood}
-                        </div>
-                      )}
-                      {entry.exitPlan && (
-                        <div>
-                          <span className="font-medium">Exit Plan:</span>{" "}
-                          {entry.exitPlan}
+                          {entry.moodLog[entry.moodLog.length-1].label}
                         </div>
                       )}
                       {entry.reflection && (

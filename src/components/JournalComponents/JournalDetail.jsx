@@ -7,7 +7,7 @@ import SellReasonReviewCard from "./SellReasonReviewCard";
 import SellEvaluationCard from "./SellEvaluationCard";
 import { useState, useEffect } from "react";
 
-export default function JournalDetail({ selected, isEntry = false }) {
+export default function JournalDetail({ selected, onAddEntry }) {
   const [sellEvaluation, setSellEvaluation] = useState(selected?.sellEvaluation || {});
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export default function JournalDetail({ selected, isEntry = false }) {
   const handleSellEvaluationChange = (newEvaluation) => {
     setSellEvaluation(newEvaluation);
   };
-  console.log("im journal detail, got selected", selected)
+
   if (!selected) return null;
 
   return (
@@ -33,7 +33,7 @@ export default function JournalDetail({ selected, isEntry = false }) {
       layout
       className="flex-1 bg-white p-8 pt-4 rounded-l-xl w-full"
     >
-      {isEntry ? (
+      {selected.isEntry ? (
         <div className="flex flex-wrap gap-[2%] w-full">
           <BuyJournalSummary
             name={selected.stock}
@@ -51,8 +51,9 @@ export default function JournalDetail({ selected, isEntry = false }) {
 
           <GenericTimelineCard
             title="Mood Log"
-            entries={selected.moodLogs || []}
-            onAddEntry={() => {}}
+            field="moodLog"
+            entries={selected.moodLog || []}
+            onAddEntry={onAddEntry}
             showEmojiPicker={true}
             hasLabel={true}
             renderHeader={(entry) => entry.label}
@@ -62,8 +63,9 @@ export default function JournalDetail({ selected, isEntry = false }) {
 
           <GenericTimelineCard
             title="Future Expectation"
+            field="expectations"
             entries={selected.expectations || []}
-            onAddEntry={() => {}}
+            onAddEntry={onAddEntry}
             showEmojiPicker={false}
             hasLabel={false}
             renderHeader={(entry) => entry.label}
@@ -79,9 +81,9 @@ export default function JournalDetail({ selected, isEntry = false }) {
             name={selected.stock}
             ticker={selected.ticker}
             shares={selected.shares}
-            buyPrice={selected.entryPrice||selected.exitPrice}
+            buyPrice={selected.entryPrice || selected.exitPrice}
             currentPrice={selected.currentPrice}
-            date={selected.entryDate||selected.exitDate}
+            date={selected.entryDate || selected.exitDate}
           />
 
           <SellReasonReviewCard

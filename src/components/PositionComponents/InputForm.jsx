@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { motion, time } from "framer-motion";
 import { useState, useEffect } from "react";
 import ReasonCheckList from "./ReasonCheckList";
 import ConfidenceSlider from "./ConfidenceSlider";
@@ -14,6 +14,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  Timestamp,
 } from "firebase/firestore";
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
@@ -61,6 +62,18 @@ export default function InputForm() {
     }
   };
 
+  function buildTimestamp(dateStr, timeStr) {
+    if (!dateStr) return { timestamp: null, timeIncluded: false };
+
+    const fullDateTime = `${dateStr}T${timeStr || "00:00"}`;
+    const timestamp = Timestamp.fromDate(new Date(fullDateTime));
+
+    return {
+      timestamp,
+      timeProvided: !!timeStr,
+    };
+  }
+
   const [form, setForm] = useState({
     ticker: "",
     companyName: "",
@@ -69,8 +82,8 @@ export default function InputForm() {
     entryDate: new Date().toLocaleDateString("en-CA"),
     stopLoss: "",
     targetPrice: "",
-    reason: "",
-    expectations: "",
+    ExitReason: "",
+    expectation: "",
     signals: "",
     strategyFit: "",
     confidence: 5,
@@ -78,8 +91,8 @@ export default function InputForm() {
     journalType: "buy",
     direction: "long",
     timeframe: "",
-    exitPlan: "",
     riskReward: "",
+    entryTimestamp: "",
     rrMode: "targetPrice", // or "riskReward"
   });
 
@@ -146,29 +159,75 @@ export default function InputForm() {
     try {
       // 🆕 Set journalType based on direction
       const adjustedJournalType = form.direction === "short" ? "sell" : "buy";
+      const entryPrice = parseFloat(form.entryPrice);
+      const stopLossPrice = parseFloat(form.stopLoss);
+
+      let lossPercent = null;
+      if (!isNaN(entryPrice) && !isNaN(stopLossPrice) && entryPrice !== 0) {
+        const percent = ((stopLossPrice - entryPrice) / entryPrice) * 100;
+        lossPercent = `${percent.toFixed(2)}%`;
+      }
 
       const updatedMoodLog = [];
-      console.log("emo", moodEmoji, "label", moodLabel, "reason", moodReason);
+      const { timestamp, timeProvided } = buildTimestamp(
+        form.entryDate,
+        form.entryTime
+      );
+      form.entryTimestamp = timestamp;
+      form.timeProvided = timeProvided;
+
+      const expectations =
+        form.expectation !== ""
+          ? [
+              {
+                content: form.expectation,
+                timestamp: form.entryTimestamp,
+                timeProvided: form.timeProvided,
+              },
+            ]
+          : [];
+
+      const exitPlan = {
+        stopLoss: form.stopLoss,
+        lossPercent: lossPercent,
+        reason: form.exitReason,
+        targetPrice: form.targetPrice,
+        rrRatio: form.riskReward,
+        timestamp: form.entryTimestamp,
+        timeProvided: form.timeProvided,
+      };
       if (moodEmoji && moodLabel) {
         updatedMoodLog.push({
           emoji: moodEmoji,
           label: moodLabel,
-          time: new Date().toLocaleTimeString("en-US"),
-          reason: moodReason,
+          content: moodReason,
+          timestamp: form.entryTimestamp,
+          timeProvided: form.timeProvided,
         });
       }
-      const journalData = {
+      const cleanedForm = {
         ...form,
+        expectations: expectations,
         moodLog: updatedMoodLog,
         journalType: adjustedJournalType,
-        isEntry:true,
+        isEntry: true,
         createdAt: serverTimestamp(),
+        exitPlan: exitPlan,
       };
+      console.log("ur form", form);
+      console.log("your cleaned form", cleanedForm);
+      delete cleanedForm.entryDate;
+      delete cleanedForm.expectation;
+      delete cleanedForm.entryTime;
+      delete cleanedForm.stopLoss;
+      delete cleanedForm.exitReason;
+      delete cleanedForm.targetPrice;
+      delete cleanedForm.riskReward;
 
       // Add journal entry
       const journalRef = await addDoc(
         collection(db, "users", user.uid, "journalEntries"),
-        journalData
+        cleanedForm
       );
 
       // Add to current position
@@ -238,7 +297,7 @@ export default function InputForm() {
         stopLoss: "",
         targetPrice: "",
         reason: "",
-        expectations: "",
+        expectation: "",
         signals: "",
         strategyFit: "",
         confidence: 5,
@@ -246,9 +305,10 @@ export default function InputForm() {
         journalType: "buy", // fallback value
         direction: "long",
         timeframe: "",
-        exitPlan: "",
         riskReward: "",
         rrMode: "targetPrice",
+        entryTimestamp: "",
+        exitReason: "",
       });
 
       setMoodEmoji("");
@@ -531,7 +591,7 @@ export default function InputForm() {
             {[
               {
                 label: "What do you expect to happen?",
-                name: "expectations",
+                name: "expectation",
                 placeholder:
                   "e.g. Price will retest previous high within 2–3 days",
               },
@@ -542,7 +602,7 @@ export default function InputForm() {
               },
               {
                 label: "Exit Plan or Conditions to Exit",
-                name: "exitPlan",
+                name: "exitReason",
                 placeholder:
                   "e.g. I will exit if price drops below trendline or loses volume",
               },

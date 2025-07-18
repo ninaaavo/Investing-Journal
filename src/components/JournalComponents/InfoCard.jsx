@@ -1,9 +1,6 @@
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function InfoCard({
-  title = "Information",
-  entry = [],
-}) {
+export default function InfoCard({ title = "Information", entry = [] }) {
   const isSingleEntry = entry.length === 1;
 
   return (
@@ -20,39 +17,47 @@ export default function InfoCard({
           exit={{ opacity: 0, y: 10 }}
           transition={{ duration: 0.2 }}
         >
-          {entry && entry.length > 0 && entry.map((section, index) => {
-            const [firstLine, ...restLines] = section.content.split("\n");
-            const isShort = firstLine.length < 20;
-            const showBorder = !isSingleEntry && index !== entry.length - 1;
+          {entry &&
+            Object.entries(entry)
+              .filter(([key]) => key !== "timestamp" && key !== "timeProvided") // exclude if needed
+              .map(([key, value], index) => {
+                const content = String(value);
+                const [firstLine, ...restLines] = content.split("\n");
+                const isShort = firstLine.length < 20;
+                const showBorder =
+                  index !==
+                  Object.keys(entry).length - 1 - (entry.timestamp ? 1 : 0); // handle border logic
 
-            return (
-              <div
-                key={index}
-                className={`mb-4 pb-2 ${showBorder ? "border-b" : ""}`}
-              >
-                {isShort ? (
-                  <div className="text-md text-primary">
-                    <span className="font-medium">{section.label}:</span>{" "}
-                    <span className="font-normal">{firstLine}</span>
-                    {restLines.length > 0 && (
-                      <div className="text-sm whitespace-pre-line mt-1">
-                        {restLines.join("\n")}
+                return (
+                  <div
+                    key={index}
+                    className={`mb-4 pb-2 ${showBorder ? "border-b" : ""}`}
+                  >
+                    {isShort ? (
+                      <div className="text-md text-primary">
+                        <span className="font-medium">
+                          {key.charAt(0).toUpperCase() + key.slice(1)}:
+                        </span>{" "}
+                        <span className="font-normal">{firstLine}</span>
+                        {restLines.length > 0 && (
+                          <div className="text-sm whitespace-pre-line mt-1">
+                            {restLines.join("\n")}
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      <>
+                        <div className="text-md font-medium text-primary mb-1">
+                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                        </div>
+                        <div className="text-sm whitespace-pre-line">
+                          {content}
+                        </div>
+                      </>
                     )}
                   </div>
-                ) : (
-                  <>
-                    <div className="text-md font-medium text-primary mb-1">
-                      {section.label}
-                    </div>
-                    <div className="text-sm whitespace-pre-line">
-                      {section.content}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                );
+              })}
         </motion.div>
       </AnimatePresence>
     </div>

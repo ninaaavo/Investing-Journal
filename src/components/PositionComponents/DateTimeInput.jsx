@@ -7,6 +7,7 @@ export default function DateTimeInput({ form, setForm, type = "entry" }) {
   const dateKey = isEntry ? "entryDate" : "exitDate";
   const timeKey = isEntry ? "entryTime" : "exitTime";
 
+  
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({
