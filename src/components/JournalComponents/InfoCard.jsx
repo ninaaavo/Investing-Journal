@@ -18,46 +18,50 @@ export default function InfoCard({ title = "Information", entry = [] }) {
           transition={{ duration: 0.2 }}
         >
           {entry &&
-            Object.entries(entry)
-              .filter(([key]) => key !== "timestamp" && key !== "timeProvided") // exclude if needed
-              .map(([key, value], index) => {
-                const content = String(value);
-                const [firstLine, ...restLines] = content.split("\n");
-                const isShort = firstLine.length < 20;
-                const showBorder =
-                  index !==
-                  Object.keys(entry).length - 1 - (entry.timestamp ? 1 : 0); // handle border logic
+            entry.map((value, index) => {
+              const content = String(value.content);
+              const [firstLine, ...restLines] = content.split("\n");
+              const isShort = firstLine.length < 20;
+              const showBorder =
+                index !==
+                Object.keys(entry).length - 1 - (entry.timestamp ? 1 : 0); // handle border logic
 
-                return (
-                  <div
-                    key={index}
-                    className={`mb-4 pb-2 ${showBorder ? "border-b" : ""}`}
-                  >
-                    {isShort ? (
-                      <div className="text-md text-primary">
+              return (
+                <div
+                  key={index}
+                  className={`mb-4 pb-2 ${showBorder ? "border-b" : ""}`}
+                >
+                  {isShort ? (
+                    <div className="text-md text-primary">
+                      {value.label && (
                         <span className="font-medium">
-                          {key.charAt(0).toUpperCase() + key.slice(1)}:
-                        </span>{" "}
-                        <span className="font-normal">{firstLine}</span>
-                        {restLines.length > 0 && (
-                          <div className="text-sm whitespace-pre-line mt-1">
-                            {restLines.join("\n")}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <>
+                          {value.label}
+                          {value.label ? ":" : ""}
+                        </span>
+                      )}
+                      {value.label && " "}
+                      <span className="font-normal">{firstLine}</span>
+                      {restLines.length > 0 && (
+                        <div className="text-sm whitespace-pre-line mt-1">
+                          {restLines.join("\n")}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {value.label && (
                         <div className="text-md font-medium text-primary mb-1">
-                          {key.charAt(0).toUpperCase() + key.slice(1)}
+                          {value.label}
                         </div>
-                        <div className="text-sm whitespace-pre-line">
-                          {content}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                      <div className="text-sm whitespace-pre-line">
+                        {content}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
         </motion.div>
       </AnimatePresence>
     </div>

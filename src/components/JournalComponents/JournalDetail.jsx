@@ -8,7 +8,9 @@ import SellEvaluationCard from "./SellEvaluationCard";
 import { useState, useEffect } from "react";
 
 export default function JournalDetail({ selected, onAddEntry }) {
-  const [sellEvaluation, setSellEvaluation] = useState(selected?.sellEvaluation || {});
+  const [sellEvaluation, setSellEvaluation] = useState(
+    selected?.sellEvaluation || {}
+  );
 
   useEffect(() => {
     setSellEvaluation(selected?.sellEvaluation || {});
@@ -19,7 +21,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
   };
 
   if (!selected) return null;
-
+  console.log("your selected is", selected);
   return (
     <motion.div
       initial={{ x: 10, opacity: 0 }}
@@ -52,7 +54,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
           <GenericTimelineCard
             title="Mood Log"
             field="moodLog"
-            entries={ [...selected.moodLog].reverse()|| []}
+            entries={[...selected.moodLog].reverse() || []}
             onAddEntry={onAddEntry}
             showEmojiPicker={true}
             hasLabel={true}
@@ -64,7 +66,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
           <GenericTimelineCard
             title="Future Expectation"
             field="expectations"
-            entries={[...selected.expectations].reverse()|| []}
+            entries={[...selected.expectations].reverse() || []}
             onAddEntry={onAddEntry}
             showEmojiPicker={false}
             hasLabel={false}
@@ -73,7 +75,20 @@ export default function JournalDetail({ selected, onAddEntry }) {
             renderContent={(entry) => entry.content}
           />
 
-          <InfoCard title="Exit Plan" entry={selected.exitPlan || []} />
+          <InfoCard
+            title="Exit Plan"
+            entry={[
+              { label: "Reason for Exit", content: selected.exitPlan.reason },
+              {
+                label: "Stop Loss",
+                content: `${selected.exitPlan.stopLoss} (${selected.exitPlan.lossPercent})`,
+              },
+              {label:"Target Price", content: selected.exitPlan.targetPrice},
+              {
+                label:"Risk / Reward Ratio", content: selected.exitPlan.rrRatio
+              }
+            ]}
+          />
         </div>
       ) : (
         <div className="flex flex-wrap gap-[2%] w-full">
@@ -91,14 +106,24 @@ export default function JournalDetail({ selected, onAddEntry }) {
             checklist={selected.checklist || {}}
           />
 
-          <InfoCard title="Exit Summary" entry={selected.exitSummary || []} />
+          <InfoCard
+            title="Exit Summary"
+            entry={[
+              {
+                label: "Reason for Exit",
+                content: selected.exitReason || "—",
+              },
+              {
+                label: "Trade go according to plan",
+                content: selected.followedPlan || "—",
+              },
+            ]}
+          />
 
           <InfoCard
             title="Trade Reflection"
             entry={
-              selected.tradeReflection
-                ? [{ content: selected.tradeReflection }]
-                : []
+              selected.reflection ? [{ content: selected.reflection }] : []
             }
           />
 

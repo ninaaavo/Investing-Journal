@@ -36,12 +36,10 @@ export default function SellReasonReviewCard({
           <div key={key} className={`mb-4 ${color}`}>
             <h3 className="text-lg font-semibold mb-2">{label}</h3>
             <ul className="list-disc pl-5 space-y-1 text-sm">
-              {grouped[key].map(({ key: field, comment }, i) => (
+              {grouped[key].map(({ key: field}, i) => (
                 <li key={i}>
-                  <span className="font-medium">{field}:</span>{" "}
-                  <span className="text-[var(--color-text)] italic">
-                    {comment || "—"}
-                  </span>
+                  <span className="font-medium">{field}</span>{" "}
+                 
                 </li>
               ))}
             </ul>
