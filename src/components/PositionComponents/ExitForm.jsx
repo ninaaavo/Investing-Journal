@@ -15,8 +15,21 @@ import {
   query,
   where,
   orderBy,
+  Timestamp,
 } from "firebase/firestore";
 import DateTimeInput from "./DateTimeInput";
+
+function buildTimestamp(dateStr, timeStr) {
+  if (!dateStr) return { timestamp: null, timeIncluded: false };
+
+  const fullDateTime = `${dateStr}T${timeStr || "00:00"}`;
+  const timestamp = Timestamp.fromDate(new Date(fullDateTime));
+
+  return {
+    timestamp,
+    timeProvided: !!timeStr,
+  };
+}
 
 const EXIT_REASONS = [
   { label: "🎯 Hit target", value: "Hit target" },
@@ -47,9 +60,8 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     followedPlan: "",
     exitDate: new Date().toLocaleDateString("en-CA"),
     expectations: [],
+    exitTime: "",
   });
-
-  console.log("exit form got", form);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -96,14 +108,30 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     stock.direction,
   ]);
 
-  const tradeDuration = useMemo(() => {
-    if (!stock.createdAt || !form.exitDate) return null;
-    const entry = stock.createdAt.toDate?.();
-    const exit = new Date(form.exitDate);
-    if (!entry || isNaN(exit)) return null;
-    const diff = Math.round((exit - entry) / (1000 * 60 * 60 * 24));
-    return diff >= 0 ? diff : null;
-  }, [stock.createdAt, form.exitDate]);
+const tradeDuration = useMemo(() => {
+  if (!stock.entryTimestamp || !form.exitDate) return null;
+
+  // Create exit datetime from form.exitDate + form.exitTime (or 12:00 PM)
+  const exitDate = new Date(form.exitDate);
+  if (isNaN(exitDate)) return null;
+  var exit;
+  if (form.exitTime) {
+    exit = buildTimestamp(form.exitDate, form.exitTime).timestamp;
+  } else {
+    exit = buildTimestamp(form.exitDate, "12:00").timestamp;
+  }
+
+  
+
+  const diffSeconds = (exit.seconds - stock.entryTimestamp.seconds);
+  const timeString = stock.entryTimestamp.toDate().toLocaleTimeString([], {
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false, // set to true if you want AM/PM format
+});
+  return diffSeconds >= 0 ? diffSeconds : null;
+}, [stock.entryTimestamp, stock.timeProvided, form.exitDate, form.exitTime]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -115,11 +143,18 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       return;
     }
 
+    const { timestamp, timeProvided } = buildTimestamp(
+      form.exitDate,
+      form.exitTime
+    );
+    form.exitTimestamp = timestamp;
+    form.timeProvided = timeProvided;
+
     const entryData = {
       ...form,
       ticker: stock.ticker,
       exitPrice: parseFloat(form.exitPrice),
-      shares: parseInt(form.shares),
+      shares: parseFloat(form.shares),
       pAndL,
       tradeDuration,
       createdAt: serverTimestamp(),
@@ -127,7 +162,12 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       direction: stock.direction,
       isEntry: false,
     };
+    delete entryData.exitDate;
+    delete entryData.exitTime;
+    delete entryData.expectations;
 
+    console.log("your exit data is", entryData);
+    
     try {
       await addDoc(
         collection(db, "users", user.uid, "journalEntries"),
@@ -160,6 +200,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     }
   };
 
+  //fetch checklist
   useEffect(() => {
     const fetchChecklist = async () => {
       const user = auth.currentUser;
@@ -192,24 +233,21 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       const expectationArr = [];
       for (const entry of activeEntries) {
         for (const [key, value] of Object.entries(entry.checklist)) {
-          console.log("ur entry", entry)
           if (!merged[key]) merged[key] = [];
           merged[key].push({
-            timestamp:entry.entryTimestamp,
-            timeProvided:entry.timeProvided,
+            timestamp: entry.entryTimestamp,
+            timeProvided: entry.timeProvided,
             shares: entry.usedShares,
             price: entry.entryPrice,
             value: value.value,
             comment: value.comment,
           });
-          
         }
-        console.log("ur merged", merged)
         if (entry.expectations) {
           expectationArr.push({
             id: entry.id,
-            timestamp:entry.timestamp,
-            timeProvided:entry.timeProvided,
+            timestamp: entry.entryTimestamp,
+            timeProvided: entry.timeProvided,
             shares: entry.usedShares,
             price: entry.entryPrice,
             expectation: entry.expectations,
@@ -365,7 +403,17 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           {tradeDuration !== null && (
             <div className="text-sm text-gray-600">
               Holding Period:{" "}
-              <span className="font-medium">{tradeDuration} days</span>
+              <span className="font-medium">
+                {tradeDuration < 86400
+                  ? (() => {
+                      const hours = Math.round(tradeDuration / 3600);
+                      
+                      return `${hours} hours`;
+                    })()
+                  : `${Math.floor(tradeDuration / 86400)} day${
+                      Math.floor(tradeDuration / 86400) !== 1 ? "s" : ""
+                    }`}
+              </span>
             </div>
           )}
 
@@ -482,7 +530,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                       ? entries
                       : entries.slice(0, 1);
                     const hasMore = entries.length > 1;
-                    console.log("exit form for trade review", entries);
                     return (
                       <div key={key}>
                         <div className="font-medium mb-1">{key}</div>
@@ -496,18 +543,21 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
                             <div className="text-xs text-gray-500">
                               {item.timestamp
-                            ? item.timestamp.toDate().toLocaleString("en-US", {
-                                month: "2-digit",
-                                day: "2-digit",
-                                year: "2-digit",
-                                ...(item.timeProvided && {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  hour12: true,
-                                }),
-                              })
-                            : ""} – {item.shares} shares @ ${item.price}{" "}
-                              ➝ {item.value}
+                                ? item.timestamp
+                                    .toDate()
+                                    .toLocaleString("en-US", {
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                      year: "2-digit",
+                                      ...(item.timeProvided && {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                        hour12: true,
+                                      }),
+                                    })
+                                : ""}{" "}
+                              – {item.shares} shares @ ${item.price} ➝{" "}
+                              {item.value}
                             </div>
                           </div>
                         ))}

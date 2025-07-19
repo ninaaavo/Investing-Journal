@@ -23,6 +23,7 @@ export default function Positions() {
   const [journalMap, setJournalMap] = useState({});
   const { user } = useUser();
 
+  
   // Fetch current positions
   useEffect(() => {
     if (!user?.uid) return;
@@ -93,18 +94,20 @@ export default function Positions() {
       return timeA - timeB;
     });
 
+    console.log("all ur matching buys", matchingBuys);
+    console.log("last buy", matchingBuys.at(-1))
     setSelectedStock({
       ...stock,
       expectations: allFormattedExpectations,
       availableShares: stock.shares,
       averagePriceFromFIFO: stock.averagePrice,
-      entryDate: matchingBuys.at(-1)?.entryDate || "",
+      entryTimestamp: matchingBuys.at(-1)?.entryTimestamp || "",
+      timeProvided: stock.timeProvided,
     });
 
     setShowExitForm(true);
   };
 
-  console.log("ur expectationtext", selectedStock);
   const sampleChecklist = {
     "Graph pattern": {
       value: "positive",
