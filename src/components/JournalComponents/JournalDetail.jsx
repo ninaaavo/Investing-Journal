@@ -52,7 +52,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
           <GenericTimelineCard
             title="Mood Log"
             field="moodLog"
-            entries={selected.moodLog || []}
+            entries={ [...selected.moodLog].reverse()|| []}
             onAddEntry={onAddEntry}
             showEmojiPicker={true}
             hasLabel={true}
@@ -64,7 +64,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
           <GenericTimelineCard
             title="Future Expectation"
             field="expectations"
-            entries={selected.expectations || []}
+            entries={[...selected.expectations].reverse()|| []}
             onAddEntry={onAddEntry}
             showEmojiPicker={false}
             hasLabel={false}

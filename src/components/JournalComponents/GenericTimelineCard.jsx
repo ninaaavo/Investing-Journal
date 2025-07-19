@@ -4,7 +4,6 @@ import { Plus, X } from "lucide-react";
 import EmojiSelector from "./EmojiSelector";
 import { Timestamp } from "firebase/firestore";
 
-
 export default function GenericTimelineCard({
   title = "Log",
   entries = [],
@@ -13,23 +12,29 @@ export default function GenericTimelineCard({
   hasLabel = false,
   field,
   renderHeader = (entry) => {
-    return entry.emoji + "hi" + entry.label;
+    return entry.emoji + entry.label;
   },
   renderContent = (entry) => entry.content,
 }) {
+    console.log("your entries before reverse is", entries);
+const reversedEntries = [...entries].reverse();
+console.log("your reversed entries", reversedEntries);
   const [newLabel, setNewLabel] = useState("");
   const [newContent, setNewContent] = useState("");
   const [emoji, setEmoji] = useState("😊");
   const [showInput, setShowInput] = useState(false);
   const handleSubmit = () => {
     if (newContent) {
-      onAddEntry({
-        emoji: showEmojiPicker ? emoji : "",
-        label: newLabel,
-        content: newContent,
-        timestamp: Timestamp.fromDate(new Date()),
-        timeProvided: true,
-      }, field);
+      onAddEntry(
+        {
+          emoji: showEmojiPicker ? emoji : "",
+          label: newLabel,
+          content: newContent,
+          timestamp: Timestamp.fromDate(new Date()),
+          timeProvided: true,
+        },
+        field
+      );
 
       setNewLabel("");
       setNewContent("");
@@ -162,16 +167,29 @@ export default function GenericTimelineCard({
               {entries.slice(1).map((entry, index) => (
                 <li key={index} className="text-sm">
                   <div className="flex items-center justify-between font-medium">
-                    {renderHeader(entry)}
+                    {entry.emoji}{" "}
+                    {entry.label &&
+                      entry.label.charAt(0).toUpperCase() +
+                        entry.label.slice(1)}{" "}
                     <span className="text-xs text-gray-400">
                       {(() => {
                         const d = entry.timestamp?.toDate?.();
-                        if (!d || !entry.timeProvided) return "";
-                        return d.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          hour12: true,
-                        });
+                        if (entry.timeProvided) {
+                          return d.toLocaleString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                            month: "2-digit",
+                            day: "2-digit",
+                            year: "2-digit",
+                          });
+                        } else {
+                          return d.toLocaleDateString("en-US", {
+                            month: "2-digit",
+                            day: "2-digit",
+                            year: "2-digit",
+                          });
+                        }
                       })()}
                     </span>
                   </div>
