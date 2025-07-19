@@ -108,30 +108,27 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     stock.direction,
   ]);
 
-const tradeDuration = useMemo(() => {
-  if (!stock.entryTimestamp || !form.exitDate) return null;
+  const tradeDuration = useMemo(() => {
+    if (!stock.entryTimestamp || !form.exitDate) return null;
 
-  // Create exit datetime from form.exitDate + form.exitTime (or 12:00 PM)
-  const exitDate = new Date(form.exitDate);
-  if (isNaN(exitDate)) return null;
-  var exit;
-  if (form.exitTime) {
-    exit = buildTimestamp(form.exitDate, form.exitTime).timestamp;
-  } else {
-    exit = buildTimestamp(form.exitDate, "12:00").timestamp;
-  }
+    // Create exit datetime from form.exitDate + form.exitTime (or 12:00 PM)
+    const exitDate = new Date(form.exitDate);
+    if (isNaN(exitDate)) return null;
+    var exit;
+    if (form.exitTime) {
+      exit = buildTimestamp(form.exitDate, form.exitTime).timestamp;
+    } else {
+      exit = buildTimestamp(form.exitDate, "12:00").timestamp;
+    }
 
-  
-
-  const diffSeconds = (exit.seconds - stock.entryTimestamp.seconds);
-  const timeString = stock.entryTimestamp.toDate().toLocaleTimeString([], {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false, // set to true if you want AM/PM format
-});
-  return diffSeconds >= 0 ? diffSeconds : null;
-}, [stock.entryTimestamp, stock.timeProvided, form.exitDate, form.exitTime]);
-
+    const diffSeconds = exit.seconds - stock.entryTimestamp.seconds;
+    const timeString = stock.entryTimestamp.toDate().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false, // set to true if you want AM/PM format
+    });
+    return diffSeconds >= 0 ? diffSeconds : null;
+  }, [stock.entryTimestamp, stock.timeProvided, form.exitDate, form.exitTime]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -167,7 +164,7 @@ const tradeDuration = useMemo(() => {
     delete entryData.expectations;
 
     console.log("your exit data is", entryData);
-    
+
     try {
       await addDoc(
         collection(db, "users", user.uid, "journalEntries"),
@@ -407,7 +404,7 @@ const tradeDuration = useMemo(() => {
                 {tradeDuration < 86400
                   ? (() => {
                       const hours = Math.round(tradeDuration / 3600);
-                      
+
                       return `${hours} hours`;
                     })()
                   : `${Math.floor(tradeDuration / 86400)} day${
