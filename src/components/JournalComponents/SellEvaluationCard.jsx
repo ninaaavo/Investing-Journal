@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function SellEvaluationCard({
@@ -6,20 +5,14 @@ export default function SellEvaluationCard({
   initialData = {},
   onChange = () => {},
 }) {
-  const [rating, setRating] = useState(initialData.rating || "⭐⭐⭐");
-  const [outcome, setOutcome] = useState(initialData.outcome || "");
-  const [repeatDecision, setRepeatDecision] = useState(initialData.repeatDecision || "");
-  const [reflection, setReflection] = useState(initialData.reflection || "");
+  const {
+    rating = "⭐⭐⭐",
+    outcome = "",
+    repeatDecision = "",
+    reflection = "",
+  } = initialData;
 
-  const handleUpdate = () => {
-    onChange({
-      rating,
-      outcome,
-      repeatDecision,
-      reflection,
-    });
-  };
-
+  console.log("your init data is", initialData)
   return (
     <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)] h-[auto] max-h-[320px] overflow-y-auto scroll-stable space-y-4">
       <div className="flex items-center justify-between mb-2">
@@ -43,7 +36,7 @@ export default function SellEvaluationCard({
             <select
               className="w-full border rounded-md p-2 text-sm"
               value={rating}
-              onChange={(e) => setRating(e.target.value)}
+              onChange={(e) => {console.log("changing rating from", rating);onChange("rating", e.target.value)} }
             >
               <option>⭐️</option>
               <option>⭐️⭐️</option>
@@ -61,7 +54,7 @@ export default function SellEvaluationCard({
             <select
               className="w-full border rounded-md p-2 text-sm"
               value={outcome}
-              onChange={(e) => setOutcome(e.target.value)}
+              onChange={(e) => onChange("outcome", e.target.value)}
             >
               <option value="">-- Select --</option>
               <option>Price dropped further</option>
@@ -79,7 +72,7 @@ export default function SellEvaluationCard({
             <select
               className="w-full border rounded-md p-2 text-sm"
               value={repeatDecision}
-              onChange={(e) => setRepeatDecision(e.target.value)}
+              onChange={(e) => onChange("repeatDecision", e.target.value)}
             >
               <option value="">-- Select --</option>
               <option>Yes</option>
@@ -98,14 +91,9 @@ export default function SellEvaluationCard({
               className="w-full border rounded-md p-2 text-sm resize-none"
               placeholder="Write a brief reflection..."
               value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
+              onChange={(e) => onChange("reflection", e.target.value)}
             />
           </div>
-
-          {/* Optional: Save button if needed */}
-          {/* <button onClick={handleUpdate} className="mt-2 text-sm text-blue-500 underline">
-            Save Evaluation
-          </button> */}
         </motion.div>
       </AnimatePresence>
     </div>

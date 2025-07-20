@@ -7,7 +7,7 @@ import SellReasonReviewCard from "./SellReasonReviewCard";
 import SellEvaluationCard from "./SellEvaluationCard";
 import { useState, useEffect } from "react";
 
-export default function JournalDetail({ selected, onAddEntry }) {
+export default function JournalDetail({ selected, onAddEntry, handleSellEvaluationChange }) {
   const [sellEvaluation, setSellEvaluation] = useState(
     selected?.sellEvaluation || {}
   );
@@ -16,10 +16,7 @@ export default function JournalDetail({ selected, onAddEntry }) {
     setSellEvaluation(selected?.sellEvaluation || {});
   }, [selected]);
 
-  const handleSellEvaluationChange = (newEvaluation) => {
-    setSellEvaluation(newEvaluation);
-  };
-
+  
   if (!selected) return null;
   console.log("your selected is", selected);
   return (

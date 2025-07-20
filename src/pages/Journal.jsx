@@ -10,6 +10,7 @@ import {
   query,
   orderBy,
   doc,
+  getDoc,
   updateDoc,
   arrayUnion,
 } from "firebase/firestore";
@@ -21,6 +22,38 @@ export default function Journal() {
   const navigate = useNavigate();
   const initialTicker = searchParams.get("ticker") || "";
   const formSell = searchParams.get("type") === "sell";
+
+  const handleSellEvaluationChange = async (field, newValue) => {
+    console.log("i got triggered, handling change");
+
+    const user = auth.currentUser;
+    if (!user || !selected?.id) return;
+
+    const currentValue = selected?.sellEvaluation?.[field];
+
+    // Don't update if nothing changed
+    if (currentValue === newValue) return;
+
+    try {
+      const docRef = doc(db, "users", user.uid, "journalEntries", selected.id);
+
+      // Optimistically update local state
+      setSelected((prev) => ({
+        ...prev,
+        sellEvaluation: {
+          ...(prev.sellEvaluation || {}),
+          [field]: newValue,
+        },
+      }));
+      console.log("updating doc tp", newValue);
+      await updateDoc(docRef, {
+        [`sellEvaluation.${field}`]: newValue, // dot notation updates nested field
+      });
+    } catch (err) {
+      console.error(`Failed to update sellEvaluation.${field}:`, err);
+      alert("Failed to update data.");
+    }
+  };
 
   useEffect(() => {
     const fetchEntries = async () => {
@@ -53,7 +86,7 @@ export default function Journal() {
   }, []);
 
   const handleAddEntry = async (entry, field) => {
-    console.log("im adding entry", entry, "to", field)
+    console.log("im adding entry", entry, "to", field);
     const user = auth.currentUser;
     if (!user || !selected?.id) return;
 
@@ -84,7 +117,26 @@ export default function Journal() {
       <JournalSidebar
         entries={entries}
         selected={selected}
-        onSelect={setSelected}
+        onSelect={async (entry) => {
+          const user = auth.currentUser;
+          if (!user || !entry?.id) return;
+
+          try {
+            const docRef = doc(
+              db,
+              "users",
+              user.uid,
+              "journalEntries",
+              entry.id
+            );
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              setSelected({ id: docSnap.id, ...docSnap.data() });
+            }
+          } catch (error) {
+            console.error("Failed to fetch selected entry:", error);
+          }
+        }}
         initialTicker={initialTicker}
         formSell={formSell}
       />
@@ -108,6 +160,7 @@ export default function Journal() {
               key={selected.id}
               selected={selected}
               onAddEntry={handleAddEntry}
+              handleSellEvaluationChange={handleSellEvaluationChange}
             />
           )}
         </AnimatePresence>
