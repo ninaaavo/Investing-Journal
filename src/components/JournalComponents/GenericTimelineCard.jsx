@@ -11,12 +11,8 @@ export default function GenericTimelineCard({
   showEmojiPicker = false,
   hasLabel = false,
   field,
-  renderHeader = (entry) => {
-    return entry.emoji + entry.label;
-  },
   renderContent = (entry) => entry.content,
 }) {
-  const reversedEntries = [...entries].reverse();
   const [newLabel, setNewLabel] = useState("");
   const [newContent, setNewContent] = useState("");
   const [emoji, setEmoji] = useState("😊");
