@@ -16,9 +16,7 @@ export default function GenericTimelineCard({
   },
   renderContent = (entry) => entry.content,
 }) {
-    console.log("your entries before reverse is", entries);
-const reversedEntries = [...entries].reverse();
-console.log("your reversed entries", reversedEntries);
+  const reversedEntries = [...entries].reverse();
   const [newLabel, setNewLabel] = useState("");
   const [newContent, setNewContent] = useState("");
   const [emoji, setEmoji] = useState("😊");
@@ -42,7 +40,6 @@ console.log("your reversed entries", reversedEntries);
       setShowInput(false);
     }
   };
-  console.log("im", title, "i got", entries);
   return (
     <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)] h-[300px] overflow-y-auto scroll-stable">
       <div className="flex items-center justify-between mb-4">
