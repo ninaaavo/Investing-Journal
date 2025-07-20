@@ -2,13 +2,14 @@ import { motion } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
 import JournalHoverCard from "./JournalHoverCard";
 
+const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+
 export default function StockCard({
   ticker,
   companyName = "",
   direction = "long",
   shares,
   averagePrice,
-  currentPrice,
   onActionClick,
   entries = [],
   onClick,
@@ -19,6 +20,30 @@ export default function StockCard({
   const cardRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [anchorRect, setAnchorRect] = useState(null);
+  const [currentPrice, setCurrentPrice] = useState(null);
+
+  // Fetch real-time price
+  useEffect(() => {
+    if (!ticker) return;
+
+    const fetchPrice = async () => {
+      try {
+        const res = await fetch(
+          `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${API_KEY}`
+        );
+        const data = await res.json();
+        if (data.c) setCurrentPrice(data.c); // 'c' is current price
+      } catch (err) {
+        console.error(`Error fetching price for ${ticker}:`, err);
+      }
+    };
+
+    fetchPrice(); // Fetch on mount
+    const interval = setInterval(fetchPrice, 15000); // Refresh every 15s
+
+    return () => clearInterval(interval);
+  }, [ticker]);
+
   useEffect(() => {
     if (isHovering && cardRef.current) {
       const rect = cardRef.current.getBoundingClientRect();
@@ -54,7 +79,10 @@ export default function StockCard({
             <div className="text-base mb-2">{companyName || "—"}</div>
             <div>Shares: {shares}</div>
             <div>Average Price: ${averagePrice.toFixed(2)}</div>
-            <div>Current Price: ${currentPrice || "—"}</div>
+            <div>
+              Current Price:{" "}
+              {currentPrice !== null ? `$${currentPrice.toFixed(2)}` : "Loading..."}
+            </div>
           </div>
           <div className="flex flex-col h-full items-end justify-between h-[120px]">
             <div
@@ -80,12 +108,11 @@ export default function StockCard({
         </div>
       </motion.div>
 
-      {/* Floating Journal card — visible while hovering */}
       {isHovering && (
         <div className="absolute -top-[220px] left-1/2 -translate-x-1/2 z-[999]">
           <JournalHoverCard
             show={true}
-            entries={entries.toReversed().slice(0,4)}
+            entries={entries.toReversed().slice(0, 4)}
             anchorRect={anchorRect}
           />
         </div>
