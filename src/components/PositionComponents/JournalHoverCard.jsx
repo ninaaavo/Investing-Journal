@@ -16,17 +16,16 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
     left: anchorRect.left + anchorRect.width / 2,
     transform: "translateX(-50%)",
   };
-const formatDateOnly = (timestamp) => {
-  const date = timestamp instanceof Date ? timestamp : timestamp?.toDate?.();
-  if (!date) return "";
+  const formatDateOnly = (timestamp) => {
+    const date = timestamp instanceof Date ? timestamp : timestamp?.toDate?.();
+    if (!date) return "";
 
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  const yy = String(date.getFullYear()).slice(-2);
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const yy = String(date.getFullYear()).slice(-2);
 
-  return `${mm}/${dd}/${yy}`;
-};
-
+    return `${mm}/${dd}/${yy}`;
+  };
 
   console.log("This is hover card my entries are", entries);
 
@@ -42,7 +41,7 @@ const formatDateOnly = (timestamp) => {
           zIndex: 9999,
           ...placementStyle,
         }}
-        className="w-[280px] p-4 bg-[var(--color-nav-background)] rounded-lg shadow-xl border border-gray-200 text-sm text-[var(--color-text)]"
+        className="w-[300px] p-4 bg-[var(--color-nav-background)] rounded-lg shadow-xl border border-gray-200 text-sm text-[var(--color-text)]"
       >
         <div className="flex justify-between items-center mb-2">
           <div className="font-semibold text-base">Journal Summary</div>
@@ -64,25 +63,41 @@ const formatDateOnly = (timestamp) => {
         <div className="space-y-2">
           {entries.map((entry, index) => {
             const isExpanded = index === expandedIndex;
-            var isEntry = (entry.journalType === "buy" && entry.direction === "long") || (entry.journalType === "sell" && entry.direction === "short");
+            var isEntry = entry.isEntry;
             return (
               <div key={entry.entryDate}>
                 <div
                   onClick={() => setExpandedIndex(index)}
-                  className={`cursor-pointer font-medium text-sm ${
+                  className={`cursor-pointer font-medium text-sm flex justify-between ${
                     entry.journalType === "buy"
                       ? "text-green-600"
                       : "text-red-500"
                   }`}
                 >
                   {isExpanded ? "▾" : "▸"}{" "}
-                  <span className=" hover:underline">
-                    {formatDateOnly(isEntry ? entry.entryTimestamp : entry.exitTimestamp)}:{" "}
+                  <span className=" hover:underline pr-2">
+                    {formatDateOnly(
+                      isEntry ? entry.entryTimestamp : entry.exitTimestamp
+                    )}
+                    :{" "}
                     {entry.journalType.charAt(0).toUpperCase() +
                       entry.journalType.slice(1)}{" "}
                     {entry.shares} shares at $
                     {isEntry ? entry.entryPrice : entry.exitPrice}
                   </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // prevent hover card closing or card click
+                      navigate(
+                        `/journal?id=${encodeURIComponent(
+                          entry?.id || ""
+                        )}`
+                      );
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                  >
+                    View
+                  </button>
                 </div>
                 <AnimatePresence>
                   {isExpanded && (
@@ -123,7 +138,10 @@ const formatDateOnly = (timestamp) => {
                       {entry.expectations && (
                         <div>
                           <span className="font-medium">Expectations:</span>{" "}
-                          {entry.expectations[entry.expectations.length-1].content}
+                          {
+                            entry.expectations[entry.expectations.length - 1]
+                              .content
+                          }
                         </div>
                       )}
                       {entry.strategyFit && (
@@ -135,7 +153,7 @@ const formatDateOnly = (timestamp) => {
                       {entry.moodLog && (
                         <div>
                           <span className="font-medium">Mood:</span>{" "}
-                          {entry.moodLog[entry.moodLog.length-1].label}
+                          {entry.moodLog[entry.moodLog.length - 1].label}
                         </div>
                       )}
                       {entry.reflection && (
