@@ -214,6 +214,8 @@ export default function InputForm() {
         createdAt: serverTimestamp(),
         exitPlan: exitPlan,
         isClosed: false,
+        totalSharesSold: 0,
+        averageSoldPrice:0,
       };
 
       cleanedForm.entryPrice = parseFloat(cleanedForm.entryPrice);
