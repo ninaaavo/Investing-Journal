@@ -56,7 +56,7 @@ export default function BuyJournalSummary({ selected }) {
   const unrealizedGain = currentPrice
     ? (currentPrice - buyPrice) * sharesHeld
     : 0;
-  const unrealizedPercent = currentPrice
+  const unrealizedPercent = sharesHeld == 0 ? 0 : currentPrice
     ? ((currentPrice - buyPrice) / buyPrice) * 100
     : 0;
 
@@ -135,10 +135,10 @@ export default function BuyJournalSummary({ selected }) {
             <span className="underline ">{sharesSold}</span>
           </div>
 
-          {showHoverCard && (
+          {showHoverCard && selected.exitEvents && (
             <MiniHoverCard
               show={showHoverCard}
-              entries={selected.exitEvents}
+              entries={selected.exitEvents || []}
               anchorRect={hoverAnchor}
               onMouseEnter={handleMouseEnter} // 👈 we'll add these in next step
               onMouseLeave={handleMouseLeave}

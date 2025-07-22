@@ -83,10 +83,10 @@ export default function SellJournalSummary({ selected }) {
             <span className="underline">{shares}</span>
           </div>
 
-          {showHoverCard && (
+          {showHoverCard && selected.entryEvents && (
             <MiniHoverCard
               show={showHoverCard}
-              entries={selected.entryEvents}
+              entries={selected.entryEvents || []}
               anchorRect={hoverAnchor}
               onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
