@@ -16,6 +16,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  limit,
 } from "firebase/firestore";
 import DateTimeInput from "./DateTimeInput";
 
@@ -122,11 +123,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     }
 
     const diffSeconds = exit.seconds - stock.entryTimestamp.seconds;
-    const timeString = stock.entryTimestamp.toDate().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false, // set to true if you want AM/PM format
-    });
     return diffSeconds >= 0 ? diffSeconds : null;
   }, [stock.entryTimestamp, stock.timeProvided, form.exitDate, form.exitTime]);
 
@@ -147,30 +143,11 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     form.exitTimestamp = timestamp;
     form.timeProvided = timeProvided;
 
-    const entryData = {
-      ...form,
-      ticker: stock.ticker,
-      exitPrice: parseFloat(form.exitPrice),
-      shares: parseFloat(form.shares),
-      pAndL,
-      tradeDuration,
-      createdAt: serverTimestamp(),
-      journalType: stock.direction === "long" ? "sell" : "buy",
-      direction: stock.direction,
-      isEntry: false,
-    };
-    delete entryData.exitDate;
-    delete entryData.exitTime;
-    delete entryData.expectations;
-
-    console.log("your exit data is", entryData);
+    const exitShares = parseFloat(form.shares);
+    const exitPrice = parseFloat(form.exitPrice);
 
     try {
-      await addDoc(
-        collection(db, "users", user.uid, "journalEntries"),
-        entryData
-      );
-
+      // === Get user's position ===
       const currentPosRef = doc(
         db,
         "users",
@@ -180,17 +157,151 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       );
       const currentDoc = await getDoc(currentPosRef);
 
-      if (currentDoc.exists()) {
-        const currentData = currentDoc.data();
-        const remainingShares = currentData.shares - parseInt(form.shares);
-        if (remainingShares > 0) {
-          await updateDoc(currentPosRef, { shares: remainingShares });
-        } else {
-          await deleteDoc(currentPosRef);
-        }
+      if (!currentDoc.exists()) {
+        alert("Current position not found.");
+        return;
       }
 
-      if (onSubmit) onSubmit(entryData);
+      const currentData = currentDoc.data();
+      const currentShares = currentData.shares;
+      const fifoStack = currentData.fifoStack || [];
+
+      if (currentShares < exitShares) {
+        alert("You don't have enough shares to sell.");
+        return;
+      }
+
+      // === FIFO Reduce ===
+      let remainingToSell = exitShares;
+      const newFifoStack = [];
+      const entryEvents = [];
+
+      for (const lot of fifoStack) {
+        if (remainingToSell <= 0) {
+          newFifoStack.push(lot);
+          continue;
+        }
+
+        const sellAmount = Math.min(lot.sharesRemaining, remainingToSell);
+
+        entryEvents.push({
+          entryId: lot.entryId,
+          entryPrice: lot.entryPrice,
+          entryTimestamp: lot.entryTimestamp,
+          sharesUsed: sellAmount,
+        });
+
+        const leftover = lot.sharesRemaining - sellAmount;
+        if (leftover > 0) {
+          newFifoStack.push({
+            ...lot,
+            sharesRemaining: leftover,
+          });
+        }
+
+        remainingToSell -= sellAmount;
+      }
+
+      if (remainingToSell > 0) {
+        alert("FIFO stack exhausted. Not enough shares to cover exit.");
+        return;
+      }
+
+      // === Create Exit Journal ===
+      const entriesRef = collection(db, "users", user.uid, "journalEntries");
+
+      const linkedEntryIds = entryEvents.map((f) => f.entryId);
+
+      const totalCostBasis = entryEvents.reduce(
+        (sum, e) => sum + e.entryPrice * e.sharesUsed,
+        0
+      );
+      const totalSharesUsed = entryEvents.reduce(
+        (sum, e) => sum + e.sharesUsed,
+        0
+      );
+      const averageBuyPrice = totalSharesUsed
+        ? totalCostBasis / totalSharesUsed
+        : 0;
+
+      const exitJournal = {
+        ...form,
+        companyName:stock.companyName,
+        ticker: stock.ticker,
+        exitPrice,
+        shares: exitShares,
+        pAndL,
+        tradeDuration,
+        createdAt: serverTimestamp(),
+        journalType: stock.direction === "long" ? "sell" : "buy",
+        direction: stock.direction,
+        isEntry: false,
+        entryEvents,
+        linkedEntryIds,
+        averageBuyPrice,
+      };
+
+      delete exitJournal.exitDate;
+      delete exitJournal.exitTime;
+      delete exitJournal.expectations;
+
+      const exitDocRef = await addDoc(entriesRef, exitJournal);
+
+      // === Update entry journals with exitEvents ===
+      for (const fifo of entryEvents) {
+        const entryRef = doc(
+          db,
+          "users",
+          user.uid,
+          "journalEntries",
+          fifo.entryId
+        );
+        const entrySnap = await getDoc(entryRef);
+        const entryData = entrySnap.data();
+        const prevEvents = entryData.exitEvents || [];
+
+        const newExitEvent = {
+          sharesSold: fifo.sharesUsed,
+          soldPrice: exitPrice,
+          exitTimestamp: timestamp,
+          exitJournalId: exitDocRef.id,
+        };
+
+        const updatedExitEvents = [...prevEvents, newExitEvent];
+
+        const totalSharesSold = updatedExitEvents.reduce(
+          (sum, e) => sum + e.sharesSold,
+          0
+        );
+        const totalProceeds = updatedExitEvents.reduce(
+          (sum, e) => sum + e.sharesSold * e.soldPrice,
+          0
+        );
+        const averageSoldPrice = totalSharesSold
+          ? totalProceeds / totalSharesSold
+          : 0;
+
+        await updateDoc(entryRef, {
+          exitEvents: updatedExitEvents,
+          totalSharesSold,
+          averageSoldPrice,
+        });
+      }
+
+      // === Update current position ===
+      const remainingShares = currentShares - exitShares;
+
+      if (remainingShares > 0) {
+        await updateDoc(currentPosRef, {
+          shares: remainingShares,
+          fifoStack: newFifoStack,
+          lastUpdated: serverTimestamp(),
+        });
+      } else {
+        await deleteDoc(currentPosRef); // fully closed
+      }
+
+      if (onSubmit) onSubmit(exitJournal);
     } catch (err) {
       console.error("Error saving exit:", err);
       alert("Failed to save exit to the database.");

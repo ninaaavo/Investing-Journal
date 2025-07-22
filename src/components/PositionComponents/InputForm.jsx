@@ -252,11 +252,20 @@ export default function InputForm() {
           Number(form.entryPrice) * Number(form.shares);
         const newAvgPrice = totalCost / totalShares;
 
+        const fifoStack = data.fifoStack || [];
+        fifoStack.push({
+          entryId: journalRef.id,
+          sharesRemaining: Number(form.shares),
+          entryPrice: Number(form.entryPrice),
+          entryTimestamp: form.entryTimestamp,
+        });
+
         await updateDoc(
           doc(db, "users", user.uid, "currentPositions", existing.id),
           {
             shares: totalShares,
             averagePrice: newAvgPrice,
+            fifoStack: fifoStack,
             lastUpdated: serverTimestamp(),
           }
         );
@@ -271,6 +280,14 @@ export default function InputForm() {
             entryDate: form.entryDate,
             direction: form.direction,
             journalEntryId: journalRef.id,
+            fifoStack: [
+              {
+                entryId: journalRef.id,
+                sharesRemaining: Number(form.shares),
+                entryPrice: Number(form.entryPrice),
+                entryTimestamp: form.entryTimestamp,
+              },
+            ],
             createdAt: serverTimestamp(),
           }
         );
