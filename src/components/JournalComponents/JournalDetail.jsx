@@ -77,9 +77,9 @@ export default function JournalDetail({
               { label: "Reason for Exit", content: selected.exitPlan.reason },
               {
                 label: "Stop Loss",
-                content: `${selected.exitPlan.stopLoss} (${selected.exitPlan.lossPercent})`,
+                content: `$${selected.exitPlan.stopLoss.toFixed(2)} (${selected.exitPlan.lossPercent}%)`,
               },
-              { label: "Target Price", content: selected.exitPlan.targetPrice },
+              { label: "Target Price", content: `$${selected.exitPlan.targetPrice.toFixed(2)}` },
               {
                 label: "Risk / Reward Ratio",
                 content: selected.exitPlan.rrRatio,
