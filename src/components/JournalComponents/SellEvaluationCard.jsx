@@ -12,7 +12,6 @@ export default function SellEvaluationCard({
     reflection = "",
   } = initialData;
 
-  console.log("your init data is", initialData)
   return (
     <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)] h-[auto] max-h-[320px] overflow-y-auto scroll-stable space-y-4">
       <div className="flex items-center justify-between mb-2">
@@ -36,7 +35,7 @@ export default function SellEvaluationCard({
             <select
               className="w-full border rounded-md p-2 text-sm"
               value={rating}
-              onChange={(e) => {console.log("changing rating from", rating);onChange("rating", e.target.value)} }
+              onChange={(e) => onChange("rating", e.target.value) }
             >
               <option>⭐️</option>
               <option>⭐️⭐️</option>
