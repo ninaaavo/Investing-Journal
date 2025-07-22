@@ -188,11 +188,11 @@ export default function InputForm() {
           : [];
 
       const exitPlan = {
-        stopLoss: form.stopLoss,
-        lossPercent: lossPercent,
+        stopLoss: parseFloat(form.stopLoss),
+        lossPercent: parseFloat(lossPercent),
         reason: form.exitReason,
-        targetPrice: form.targetPrice,
-        rrRatio: form.riskReward,
+        targetPrice: parseFloat(form.targetPrice),
+        rrRatio: parseFloat(form.riskReward),
         timestamp: form.entryTimestamp,
         timeProvided: form.timeProvided,
       };
@@ -215,6 +215,10 @@ export default function InputForm() {
         exitPlan: exitPlan,
         isClosed: false,
       };
+
+      cleanedForm.entryPrice = parseFloat(cleanedForm.entryPrice);
+            cleanedForm.shares = parseInt(cleanedForm.shares);
+
       console.log("ur form", form);
       console.log("your cleaned form", cleanedForm);
       delete cleanedForm.entryDate;
