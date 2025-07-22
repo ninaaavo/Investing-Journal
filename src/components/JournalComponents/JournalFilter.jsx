@@ -65,7 +65,11 @@ export default function JournalFilter({
             exit={{ opacity: 0, y: 2 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            {open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {open ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
           </motion.div>
         </button>
 
@@ -130,6 +134,22 @@ export default function JournalFilter({
                   </select>
                 </div>
 
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
+                    Status
+                  </label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => onChange("status", e.target.value)}
+                    className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
+                  >
+                    <option value="">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+
                 {/* Date Range Filter */}
                 <div>
                   <label className="block text-sm font-medium mb-1 text-[var(--color-text)]">
@@ -155,7 +175,11 @@ export default function JournalFilter({
                   type="submit"
                   whileHover={{ scale: 0.98 }}
                   whileTap={{ scale: 1.02 }}
-                  transition={{ type: "tween", ease: "easeOut", duration: 0.15 }}
+                  transition={{
+                    type: "tween",
+                    ease: "easeOut",
+                    duration: 0.15,
+                  }}
                   className="mt-2 w-full bg-[var(--color-text)] text-white py-2 rounded-md text-sm font-medium hover:opacity-80"
                 >
                   Apply Filter
