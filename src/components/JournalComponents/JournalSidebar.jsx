@@ -96,6 +96,19 @@ export default function JournalSidebar({
           else if (!isBuy && !isShort)
             tagClasses += "bg-red-100 text-red-800"; // Sell
           else tagClasses += "bg-orange-100 text-orange-800"; // Sell – Short
+
+          const statusTag =
+            entry.isEntry &&
+            (entry.isClosed ? (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full font-medium">
+                Closed
+              </span>
+            ) : (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full font-medium">
+                Open
+              </span>
+            ));
+
           return (
             <li
               key={entry.id}
@@ -137,9 +150,13 @@ export default function JournalSidebar({
                       return `${mm}/${dd}/${yyyy}`;
                     }
                   })()}
-                </div>{" "}
+                </div>
               </div>
-              <span className={tagClasses}>{label}</span>
+              <div className="flex items-center">
+                <span className="pr-2">{statusTag}</span>
+                <span className={tagClasses}>{label}</span>
+                
+              </div>
             </li>
           );
         })}
