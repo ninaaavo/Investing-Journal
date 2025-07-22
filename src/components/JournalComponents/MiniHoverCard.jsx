@@ -59,7 +59,7 @@ export default function MiniHoverCard({
               onClick={(e) => {
                 e.stopPropagation();
                 if (journalId) {
-                  navigate(`/journal?entryId=${journalId}`);
+                  navigate(`/journal?id=${journalId}`);
                 }
               }}
               className="hover:text-blue-600 cursor-pointer"
