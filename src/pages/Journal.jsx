@@ -79,11 +79,34 @@ export default function Journal() {
       }));
 
       setEntries(formatted);
-      if (formatted.length > 0) setSelected(formatted[0]);
+      const selectedId = searchParams.get("id");
+      const selectedEntry = formatted.find((entry) => entry.id === selectedId);
+      setSelected(selectedEntry || formatted[0]);
     };
 
     fetchEntries();
   }, []);
+  useEffect(() => {
+    const updateSelectedFromURL = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const id = searchParams.get("id");
+      if (!id) return;
+
+      try {
+        const docRef = doc(db, "users", user.uid, "journalEntries", id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setSelected({ id: docSnap.id, ...docSnap.data() });
+        }
+      } catch (error) {
+        console.error("Failed to fetch entry from URL:", error);
+      }
+    };
+
+    updateSelectedFromURL();
+  }, [searchParams]);
 
   const handleAddEntry = async (entry, field) => {
     console.log("im adding entry", entry, "to", field);
@@ -132,6 +155,7 @@ export default function Journal() {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
               setSelected({ id: docSnap.id, ...docSnap.data() });
+              navigate(`/journal?id=${entry.id}`);
             }
           } catch (error) {
             console.error("Failed to fetch selected entry:", error);
