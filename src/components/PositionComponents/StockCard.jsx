@@ -76,14 +76,49 @@ export default function StockCard({
         <div className="flex justify-between items-start h-fit">
           <div>
             <div className="text-2xl font-medium">{ticker}</div>
-            <div className="text-base mb-2">{companyName || "—"}</div>
+            <div className="text-base mb-2">
+              {companyName
+                ? companyName.length > 17
+                  ? companyName.slice(0, 17) + "..."
+                  : companyName
+                : "—"}
+            </div>
             <div>Shares: {shares}</div>
             <div>Average Price: ${averagePrice.toFixed(2)}</div>
             <div>
               Current Price:{" "}
-              {currentPrice !== null ? `$${currentPrice.toFixed(2)}` : "Loading..."}
+              {currentPrice !== null
+                ? `$${currentPrice.toFixed(2)}`
+                : "Loading..."}
             </div>
+
+            {currentPrice !== null && (
+              <div className="mt-1">
+                {(() => {
+                  const diff = isLong
+                    ? currentPrice - averagePrice
+                    : averagePrice - currentPrice;
+                  const pl = diff * shares;
+                  const percent = (diff / averagePrice) * 100;
+                  const plClass =
+                    pl > 0
+                      ? "text-green-600"
+                      : pl < 0
+                      ? "text-red-600"
+                      : "text-gray-600";
+
+                  return (
+                    <div className={plClass}>
+                      P/L: {pl >= 0 ? "+" : ""}${pl.toFixed(2)} (
+                      {percent >= 0 ? "+" : ""}
+                      {percent.toFixed(2)}%)
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
+
           <div className="flex flex-col h-full items-end justify-between h-[120px]">
             <div
               className={`px-3 py-1 rounded-full text-xs font-semibold w-fit ${
