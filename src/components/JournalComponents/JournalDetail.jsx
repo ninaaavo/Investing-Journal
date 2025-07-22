@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import BuyJournalSummary from "./BuyJournalSummary";
+import SellJournalSummary from "./SellJournalSummary";
 import ReasonJournalCard from "./ReasonJournalCard";
 import GenericTimelineCard from "./GenericTimelineCard";
 import InfoCard from "./InfoCard";
@@ -7,7 +8,11 @@ import SellReasonReviewCard from "./SellReasonReviewCard";
 import SellEvaluationCard from "./SellEvaluationCard";
 import { useState, useEffect } from "react";
 
-export default function JournalDetail({ selected, onAddEntry, handleSellEvaluationChange }) {
+export default function JournalDetail({
+  selected,
+  onAddEntry,
+  handleSellEvaluationChange,
+}) {
   const [sellEvaluation, setSellEvaluation] = useState(
     selected?.sellEvaluation || {}
   );
@@ -16,7 +21,6 @@ export default function JournalDetail({ selected, onAddEntry, handleSellEvaluati
     setSellEvaluation(selected?.sellEvaluation || {});
   }, [selected]);
 
-  
   if (!selected) return null;
   console.log("your selected is", selected);
   return (
@@ -35,12 +39,7 @@ export default function JournalDetail({ selected, onAddEntry, handleSellEvaluati
       {selected.isEntry ? (
         <div className="flex flex-wrap gap-[2%] w-full">
           <BuyJournalSummary
-            name={selected.stock}
-            ticker={selected.ticker}
-            shares={selected.shares}
-            buyPrice={selected.entryPrice}
-            currentPrice={selected.currentPrice}
-            date={selected.entryDate}
+            selected={selected}
           />
 
           <ReasonJournalCard
@@ -80,23 +79,17 @@ export default function JournalDetail({ selected, onAddEntry, handleSellEvaluati
                 label: "Stop Loss",
                 content: `${selected.exitPlan.stopLoss} (${selected.exitPlan.lossPercent})`,
               },
-              {label:"Target Price", content: selected.exitPlan.targetPrice},
+              { label: "Target Price", content: selected.exitPlan.targetPrice },
               {
-                label:"Risk / Reward Ratio", content: selected.exitPlan.rrRatio
-              }
+                label: "Risk / Reward Ratio",
+                content: selected.exitPlan.rrRatio,
+              },
             ]}
           />
         </div>
       ) : (
         <div className="flex flex-wrap gap-[2%] w-full">
-          <BuyJournalSummary
-            name={selected.stock}
-            ticker={selected.ticker}
-            shares={selected.shares}
-            buyPrice={selected.entryPrice || selected.exitPrice}
-            currentPrice={selected.currentPrice}
-            date={selected.entryDate || selected.exitDate}
-          />
+          <SellJournalSummary selected={selected} />
 
           <SellReasonReviewCard
             checklistReview={selected.checklistReview || {}}
