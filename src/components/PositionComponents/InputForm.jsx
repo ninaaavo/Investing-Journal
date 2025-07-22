@@ -213,6 +213,7 @@ export default function InputForm() {
         isEntry: true,
         createdAt: serverTimestamp(),
         exitPlan: exitPlan,
+        isClosed: false,
       };
       console.log("ur form", form);
       console.log("your cleaned form", cleanedForm);
