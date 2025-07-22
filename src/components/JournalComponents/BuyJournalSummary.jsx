@@ -1,35 +1,46 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import MiniHoverCard from "./MiniHoverCard";
 
 const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
 
-export default function BuyJournalSummary({
-  name,
-  ticker,
-  shares,
-  sharesSold=0,
-  buyPrice,
-  avgSoldPrice = 0,
-  currentPrice: initialPrice = null,
-  date,
-}) {
-  // Parse props
-  shares = parseFloat(shares);
-  sharesSold = parseFloat(sharesSold);
-  buyPrice = parseFloat(buyPrice);
-  avgSoldPrice = parseFloat(avgSoldPrice);
+export default function BuyJournalSummary({ selected }) {
+  const shares = parseFloat(selected.shares);
+  const sharesSold = parseFloat(selected.totalSharesSold) || 0;
+  const buyPrice = parseFloat(selected.entryPrice);
+  const avgSoldPrice = parseFloat(selected.averageSoldPrice);
+  const timestamp = selected.entryTimestamp || selected.exitTimestamp;
 
-  // Local state to fetch current price
+  const hoverTimeoutRef = useRef(null);
+
+  const handleMouseEnter = () => {
+    clearTimeout(hoverTimeoutRef.current);
+    const rect = hoverRef.current?.getBoundingClientRect();
+    setHoverAnchor(rect);
+    setShowHoverCard(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setShowHoverCard(false);
+    }, 150); // small delay for smoother UX
+  };
+
+  // Get all exitEvents from relatedEntries
   const [currentPrice, setCurrentPrice] = useState(
-    initialPrice ? parseFloat(initialPrice) : null
+    selected.initialPrice ? parseFloat(selected.initialPrice) : null
   );
 
+  const hoverRef = useRef();
+  const [hoverAnchor, setHoverAnchor] = useState(null);
+  const [showHoverCard, setShowHoverCard] = useState(false);
+
   useEffect(() => {
-    if (!ticker) return;
+    if (!selected.ticker) return;
 
     const fetchPrice = async () => {
       try {
         const res = await fetch(
-          `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${API_KEY}`
+          `https://finnhub.io/api/v1/quote?symbol=${selected.ticker}&token=${API_KEY}`
         );
         const data = await res.json();
         if (data.c) setCurrentPrice(data.c);
@@ -39,10 +50,12 @@ export default function BuyJournalSummary({
     };
 
     fetchPrice();
-  }, [ticker]);
+  }, [selected.ticker]);
 
   const sharesHeld = shares - sharesSold;
-  const unrealizedGain = currentPrice ? (currentPrice - buyPrice) * sharesHeld : 0;
+  const unrealizedGain = currentPrice
+    ? (currentPrice - buyPrice) * sharesHeld
+    : 0;
   const unrealizedPercent = currentPrice
     ? ((currentPrice - buyPrice) / buyPrice) * 100
     : 0;
@@ -58,9 +71,29 @@ export default function BuyJournalSummary({
 
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-primary">
-          {name} ({ticker})
+          {selected.ticker}{" "}
+          <span className="font-normal pb-1">({selected.companyName})</span>
         </h2>
-        <p className="text-sm text-[var(--color-text)]">{date}</p>
+        <p className="text-sm text-[var(--color-text)]">
+          {(() => {
+            const dateObj = timestamp.toDate();
+            const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+            const day = String(dateObj.getDate()).padStart(2, "0");
+            const year = String(dateObj.getFullYear()).slice(-2);
+
+            if (!selected.timeProvided) {
+              return `${month}/${day}/${year}`;
+            } else {
+              let hours = dateObj.getHours();
+              const minutes = String(dateObj.getMinutes()).padStart(2, "0");
+              const ampm = hours >= 12 ? "PM" : "AM";
+              hours = hours % 12 || 12;
+              const formattedHours = String(hours).padStart(2, "0");
+
+              return `${formattedHours}:${minutes} ${ampm}, ${month}/${day}/${year}`;
+            }
+          })()}
+        </p>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6 text-sm text-[var(--color-text)]">
@@ -73,20 +106,58 @@ export default function BuyJournalSummary({
           <p>${buyPrice.toFixed(2)}</p>
         </div>
         <div>
-          <p className="font-medium">Total Gain:</p>
-          <p>${(realizedGain + unrealizedGain).toFixed(2)}</p>
+          <p className="font-medium">
+            Total {realizedGain + unrealizedGain >= 0 ? "Gain" : "Loss"}:
+          </p>
+          <p
+            className={
+              realizedGain + unrealizedGain >= 0
+                ? "text-green-600"
+                : "text-red-500"
+            }
+          >
+            ${(realizedGain + unrealizedGain).toFixed(2)} (
+            {(
+              ((realizedGain + unrealizedGain) / (buyPrice * shares)) *
+              100
+            ).toFixed(1)}
+            %)
+          </p>
         </div>
-        <div>
-          <p className="font-medium">Shares Sold:</p>
-          <p>{sharesSold}</p>
+        <div
+          className="relative inline-block"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div ref={hoverRef} className="cursor-pointer pt-0.2">
+            <p className="font-medium">Shares Sold:</p>
+
+            <span className="underline ">{sharesSold}</span>
+          </div>
+
+          {showHoverCard && (
+            <MiniHoverCard
+              show={showHoverCard}
+              entries={selected.exitEvents}
+              anchorRect={hoverAnchor}
+              onMouseEnter={handleMouseEnter} // 👈 we'll add these in next step
+              onMouseLeave={handleMouseLeave}
+            />
+          )}
         </div>
+
         <div>
           <p className="font-medium">Average Sold Price:</p>
           <p>${avgSoldPrice.toFixed(2)}</p>
         </div>
         <div>
-          <p className="font-medium">Realized Gain:</p>
-          <p>${realizedGain.toFixed(2)}</p>
+          <p className="font-medium">
+            Realized {realizedGain >= 0 ? "Gain" : "Loss"}:
+          </p>
+          <p className={realizedGain >= 0 ? "text-green-600" : "text-red-500"}>
+            ${realizedGain.toFixed(2)} (
+            {((realizedGain / (buyPrice * sharesSold || 1)) * 100).toFixed(1)}%)
+          </p>
         </div>
         <div>
           <p className="font-medium">Current Shares Held:</p>
