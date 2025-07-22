@@ -78,7 +78,7 @@ export default function GenericTimelineCard({
               {hasLabel && (
                 <input
                   type="text"
-                  className={`w-full border border-gray-300 rounded-md px-3 ${
+                  className={`w-full border border-gray-300 rounded-md px-3 text-wrap ${
                     showEmojiPicker ? "pl-9" : ""
                   } py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300`}
                   placeholder="Label (e.g., Calm)"
@@ -88,7 +88,7 @@ export default function GenericTimelineCard({
               )}
             </div>
             <textarea
-              className="w-full border border-gray-300 rounded-md px-3 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border text-wrap border-gray-300 rounded-md px-3 py-1 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
               rows={2}
               placeholder="Reflection or note"
               value={newContent}
@@ -150,7 +150,9 @@ export default function GenericTimelineCard({
                     })()}
                   </span>
                 </div>
-                <p className="text-sm text-[var(--color-text)] leading-snug mt-1">
+                <p
+                  className="text-sm text-[var(--color-text)] break-words whitespace-pre-wrap leading-snug mt-1"
+                >
                   {renderContent(entries[0])}
                 </p>
               </div>
