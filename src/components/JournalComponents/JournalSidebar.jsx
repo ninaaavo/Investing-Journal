@@ -1,5 +1,6 @@
 import JournalFilter from "./JournalFilter";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function JournalSidebar({
   entries,
@@ -15,6 +16,7 @@ export default function JournalSidebar({
     fromDate: "",
     toDate: "",
   });
+  const navigate = useNavigate();
 
   useEffect(() => {
     let filtered = entries;
@@ -153,9 +155,30 @@ export default function JournalSidebar({
                 </div>
               </div>
               <div className="flex items-center">
-                <span className="pr-2">{statusTag}</span>
-                <span className={tagClasses}>{label}</span>
-                
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (entry.isEntry) {
+                      const status = entry.isClosed ? "closed" : "open";
+                      navigate(`/journal?status=${status}`);
+                    }
+                  }}
+                  className="pr-2 hover:underline focus:outline-none"
+                >
+                  {statusTag}
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation(); // prevent selecting the whole row
+                    navigate(
+                      `/journal?ticker=${entry.ticker}&type=${entry.type}`
+                    );
+                  }}
+                  className={`${tagClasses} hover:underline focus:outline-none`}
+                >
+                  {label}
+                </button>
               </div>
             </li>
           );
