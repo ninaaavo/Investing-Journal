@@ -1,73 +1,122 @@
 import JournalFilter from "./JournalFilter";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export default function JournalSidebar({
   entries,
   selected,
   onSelect,
   initialTicker = "",
-  formSell,
+  initialType = "",
+  initialStatus = "",
+  initialDirection = "",
 }) {
   const [filteredStocks, setFilteredStocks] = useState(entries);
   const [filters, setFilters] = useState({
     ticker: initialTicker,
-    type: "",
+    type: initialType,
+    direction: initialDirection,
+    status: initialStatus,
     fromDate: "",
     toDate: "",
   });
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
+    const searchTicker = searchParams.get("ticker") || "";
+    const searchType = searchParams.get("type") || "";
+    const searchStatus = searchParams.get("status") || "";
+    const searchDirection = searchParams.get("direction") || "";
+    const searchFromDate = searchParams.get("fromDate") || "";
+    const searchToDate = searchParams.get("toDate") || "";
+
+    const updatedFilters = {
+      ticker: searchTicker,
+      type: searchType,
+      direction: searchDirection,
+      status: searchStatus,
+      fromDate: searchFromDate,
+      toDate: searchToDate,
+    };
+    setFilters(updatedFilters);
+
     let filtered = entries;
 
-    if (initialTicker) {
+    if (searchTicker)
       filtered = filtered.filter((entry) =>
-        entry.ticker.toLowerCase().includes(initialTicker.toLowerCase())
+        entry.ticker.toLowerCase().includes(searchTicker.toLowerCase())
       );
-    }
-
-    if (formSell) {
+    if (searchType)
       filtered = filtered.filter(
-        (entry) => entry.type.toLowerCase() === "sell"
+        (entry) => entry.type.toLowerCase() === searchType.toLowerCase()
       );
-    }
+    if (searchDirection)
+      filtered = filtered.filter(
+        (entry) =>
+          entry.direction?.toLowerCase() === searchDirection.toLowerCase()
+      );
+    if (searchStatus)
+      filtered = filtered.filter((entry) => {
+        if (!entry.isEntry) return false;
+        return searchStatus === "closed" ? entry.isClosed : !entry.isClosed;
+      });
+    if (searchFromDate)
+      filtered = filtered.filter((entry) => {
+        const entryDate = new Date(entry.date);
+        return entryDate >= new Date(searchFromDate);
+      });
+    if (searchToDate)
+      filtered = filtered.filter((entry) => {
+        const entryDate = new Date(entry.date);
+        return entryDate <= new Date(searchToDate);
+      });
 
     setFilteredStocks(filtered);
-  }, [initialTicker, formSell, entries]);
+
+    if (filtered.length > 0) {
+      const selectedId = searchParams.get("id");
+      const selectedEntry =
+        filtered.find((e) => e.id === selectedId) || filtered[0];
+      onSelect(selectedEntry);
+
+      const queryParams = new URLSearchParams({
+        ...(searchTicker && { ticker: searchTicker }),
+        ...(searchType && { type: searchType }),
+        ...(searchStatus && { status: searchStatus }),
+        ...(searchDirection && { direction: searchDirection }),
+        ...(searchFromDate && { fromDate: searchFromDate }),
+        ...(searchToDate && { toDate: searchToDate }),
+        id: selectedEntry.id,
+      });
+
+      navigate(`/journal?${queryParams.toString()}`);
+    }
+  }, [entries, searchParams]);
 
   const clearFilter = () => {
-    setFilteredStocks(entries);
-  };
-
-  const onFilterSubmit = () => {
-    const filtered = entries.filter((entry) => {
-      const matchesTicker =
-        !filters.ticker ||
-        entry.ticker.toLowerCase().includes(filters.ticker.toLowerCase());
-
-      const matchesType =
-        !filters.type ||
-        entry.type.toLowerCase() === filters.type.toLowerCase();
-
-      const entryDate = new Date(entry.date);
-      const matchesFromDate =
-        !filters.fromDate || entryDate >= new Date(filters.fromDate);
-
-      const matchesToDate =
-        !filters.toDate || entryDate <= new Date(filters.toDate);
-
-      return matchesTicker && matchesType && matchesFromDate && matchesToDate;
-    });
-
-    setFilteredStocks(filtered);
-
     setFilters({
       ticker: "",
       type: "",
+      direction: "",
+      status: "",
       fromDate: "",
       toDate: "",
     });
+    setFilteredStocks(entries);
+    navigate("/journal");
+  };
+
+  const onFilterSubmit = () => {
+    const queryParams = new URLSearchParams({
+      ...(filters.ticker && { ticker: filters.ticker }),
+      ...(filters.type && { type: filters.type }),
+      ...(filters.status && { status: filters.status }),
+      ...(filters.direction && { direction: filters.direction }),
+      ...(filters.fromDate && { fromDate: filters.fromDate }),
+      ...(filters.toDate && { toDate: filters.toDate }),
+    });
+    navigate(`/journal?${queryParams.toString()}`);
   };
 
   return (
@@ -91,13 +140,10 @@ export default function JournalSidebar({
           const label = isShort ? `${baseLabel} – Short` : baseLabel;
 
           let tagClasses = "px-2 py-0.5 text-xs rounded-full font-medium ";
-          if (isBuy && !isShort)
-            tagClasses += "bg-green-100 text-green-800"; // Buy
-          else if (isBuy && isShort)
-            tagClasses += "bg-cyan-100 text-cyan-800"; // Buy – Short
-          else if (!isBuy && !isShort)
-            tagClasses += "bg-red-100 text-red-800"; // Sell
-          else tagClasses += "bg-orange-100 text-orange-800"; // Sell – Short
+          if (isBuy && !isShort) tagClasses += "bg-green-100 text-green-800";
+          else if (isBuy && isShort) tagClasses += "bg-cyan-100 text-cyan-800";
+          else if (!isBuy && !isShort) tagClasses += "bg-red-100 text-red-800";
+          else tagClasses += "bg-orange-100 text-orange-800";
 
           const statusTag =
             entry.isEntry &&
@@ -128,20 +174,15 @@ export default function JournalSidebar({
                     const rawDate = entry.isEntry
                       ? entry.entryTimestamp
                       : entry.exitTimestamp;
-
                     const timeProvided = entry.isEntry
                       ? entry.timeProvided
                       : entry.exitTimeProvided;
-
                     const d =
                       rawDate instanceof Date ? rawDate : rawDate?.toDate?.();
-
                     if (!d) return "";
-
                     const mm = String(d.getMonth() + 1).padStart(2, "0");
                     const dd = String(d.getDate()).padStart(2, "0");
                     const yyyy = d.getFullYear();
-
                     if (timeProvided) {
                       let hour = d.getHours();
                       const minute = String(d.getMinutes()).padStart(2, "0");
@@ -167,12 +208,11 @@ export default function JournalSidebar({
                 >
                   {statusTag}
                 </button>
-
                 <button
                   onClick={(e) => {
-                    e.stopPropagation(); // prevent selecting the whole row
+                    e.stopPropagation();
                     navigate(
-                      `/journal?ticker=${entry.ticker}&type=${entry.type}`
+                      `/journal?type=${entry.type}`
                     );
                   }}
                   className={`${tagClasses} hover:underline focus:outline-none`}

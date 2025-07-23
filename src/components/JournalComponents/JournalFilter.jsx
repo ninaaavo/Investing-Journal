@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import TickerSearchInput from "../TickerSearchInput";
@@ -12,11 +12,24 @@ export default function JournalFilter({
   const [open, setOpen] = useState(false);
   const [filterApplied, setFilterApplied] = useState(false);
 
+  useEffect(() => {
+    const anyActive =
+      filters.ticker ||
+      filters.type ||
+      filters.status ||
+      filters.direction ||
+      filters.fromDate ||
+      filters.toDate;
+
+    setFilterApplied(!!anyActive);
+  }, [filters]);
+
   const handleSubmit = () => {
     if (
       !filters.ticker.trim() &&
       !filters.type &&
       !filters.direction &&
+      !filters.status &&
       !filters.fromDate &&
       !filters.toDate
     ) {
@@ -26,11 +39,12 @@ export default function JournalFilter({
     setFilterApplied(true);
     setOpen(false);
   };
-
+  console.log("im filter, the filters i got are", filters);
   const handleClear = () => {
     onChange("ticker", "");
     onChange("type", "");
     onChange("direction", "");
+    onChange("status", "");
     onChange("fromDate", "");
     onChange("toDate", "");
     onClearFilter();

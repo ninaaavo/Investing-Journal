@@ -20,24 +20,23 @@ export default function Journal() {
   const [selected, setSelected] = useState(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
   const initialTicker = searchParams.get("ticker") || "";
-  const formSell = searchParams.get("type") === "sell";
+  const initialType = searchParams.get("type") || "";
+  const initialStatus = searchParams.get("status") || "";
+  const initialDirection = searchParams.get("direction") || "";
+  const selectedId = searchParams.get("id") || "";
 
   const handleSellEvaluationChange = async (field, newValue) => {
-    console.log("i got triggered, handling change");
-
     const user = auth.currentUser;
     if (!user || !selected?.id) return;
 
     const currentValue = selected?.sellEvaluation?.[field];
-
-    // Don't update if nothing changed
     if (currentValue === newValue) return;
 
     try {
       const docRef = doc(db, "users", user.uid, "journalEntries", selected.id);
 
-      // Optimistically update local state
       setSelected((prev) => ({
         ...prev,
         sellEvaluation: {
@@ -45,9 +44,9 @@ export default function Journal() {
           [field]: newValue,
         },
       }));
-      console.log("updating doc tp", newValue);
+
       await updateDoc(docRef, {
-        [`sellEvaluation.${field}`]: newValue, // dot notation updates nested field
+        [`sellEvaluation.${field}`]: newValue,
       });
     } catch (err) {
       console.error(`Failed to update sellEvaluation.${field}:`, err);
@@ -79,13 +78,13 @@ export default function Journal() {
       }));
 
       setEntries(formatted);
-      const selectedId = searchParams.get("id");
       const selectedEntry = formatted.find((entry) => entry.id === selectedId);
       setSelected(selectedEntry || formatted[0]);
     };
 
     fetchEntries();
   }, []);
+
   useEffect(() => {
     const updateSelectedFromURL = async () => {
       const user = auth.currentUser;
@@ -109,14 +108,12 @@ export default function Journal() {
   }, [searchParams]);
 
   const handleAddEntry = async (entry, field) => {
-    console.log("im adding entry", entry, "to", field);
     const user = auth.currentUser;
     if (!user || !selected?.id) return;
 
     try {
       const docRef = doc(db, "users", user.uid, "journalEntries", selected.id);
 
-      // Optimistically update local state
       setSelected((prev) => ({
         ...prev,
         [field]: [...(prev?.[field] || []), entry],
@@ -155,14 +152,24 @@ export default function Journal() {
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
               setSelected({ id: docSnap.id, ...docSnap.data() });
-              navigate(`/journal?id=${entry.id}`);
+              const queryParams = new URLSearchParams({
+                ...(initialTicker && { ticker: initialTicker }),
+                ...(initialType && { type: initialType }),
+                ...(initialStatus && { status: initialStatus }),
+                ...(initialDirection && { direction: initialDirection }),
+                id: entry.id,
+              });
+
+              navigate(`/journal?${queryParams.toString()}`);
             }
           } catch (error) {
             console.error("Failed to fetch selected entry:", error);
           }
         }}
         initialTicker={initialTicker}
-        formSell={formSell}
+        initialType={initialType}
+        initialStatus={initialStatus}
+        initialDirection={initialDirection}
       />
 
       {/* Right side: Journal Detail */}
@@ -189,7 +196,7 @@ export default function Journal() {
           )}
         </AnimatePresence>
 
-        {formSell && (
+        {/* {initialType === "sell" && (
           <div className="absolute top-4 right-4 bg-white border border-gray-300 p-3 rounded-lg shadow-md text-sm z-50">
             <p className="mb-2">Done reviewing past trades?</p>
             <button
@@ -199,7 +206,7 @@ export default function Journal() {
               Return to Exit Form
             </button>
           </div>
-        )}
+        )} */}
       </motion.div>
     </motion.div>
   );
