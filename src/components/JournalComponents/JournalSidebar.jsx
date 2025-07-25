@@ -48,8 +48,8 @@ export default function JournalSidebar({
         entry.ticker.toLowerCase().includes(searchTicker.toLowerCase())
       );
     if (searchType)
-      filtered = filtered.filter(
-        (entry) => entry.type.toLowerCase() === searchType.toLowerCase()
+      filtered = filtered.filter((entry) =>
+        searchType.toLowerCase() === "entry" ? entry.isEntry : !entry.isEntry
       );
     if (searchDirection)
       filtered = filtered.filter(
@@ -134,29 +134,6 @@ export default function JournalSidebar({
 
       <ul className="space-y-2 w-full">
         {filteredStocks.map((entry) => {
-          const isBuy = entry.type.toLowerCase() === "buy";
-          const isShort = entry.direction?.toLowerCase() === "short";
-          const baseLabel = entry.type[0].toUpperCase() + entry.type.slice(1);
-          const label = isShort ? `${baseLabel} – Short` : baseLabel;
-
-          let tagClasses = "px-2 py-0.5 text-xs rounded-full font-medium ";
-          if (isBuy && !isShort) tagClasses += "bg-green-100 text-green-800";
-          else if (isBuy && isShort) tagClasses += "bg-cyan-100 text-cyan-800";
-          else if (!isBuy && !isShort) tagClasses += "bg-red-100 text-red-800";
-          else tagClasses += "bg-orange-100 text-orange-800";
-
-          const statusTag =
-            entry.isEntry &&
-            (entry.isClosed ? (
-              <span className="ml-2 px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full font-medium">
-                Closed
-              </span>
-            ) : (
-              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full font-medium">
-                Open
-              </span>
-            ));
-
           return (
             <li
               key={entry.id}
@@ -195,29 +172,41 @@ export default function JournalSidebar({
                   })()}
                 </div>
               </div>
-              <div className="flex items-center">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (entry.isEntry) {
-                      const status = entry.isClosed ? "closed" : "open";
-                      navigate(`/journal?status=${status}`);
-                    }
-                  }}
-                  className="pr-2 hover:underline focus:outline-none"
-                >
-                  {statusTag}
-                </button>
+              <div className="flex items-center space-x-1">
+                {entry.direction && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(
+                        `/journal?direction=${entry.direction}&id=${entry.id}`
+                      );
+                    }}
+                    className={`px-2 py-0.5 text-xs rounded-full font-medium hover:underline focus:outline-none ${
+                      entry.direction === "long"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {entry.direction[0].toUpperCase() +
+                      entry.direction.slice(1)}
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(
-                      `/journal?type=${entry.type}`
+                      `/journal?type=${entry.isEntry ? "entry" : "exit"}&id=${
+                        entry.id
+                      }`
                     );
                   }}
-                  className={`${tagClasses} hover:underline focus:outline-none`}
+                  className={`px-2 py-0.5 text-xs rounded-full font-medium hover:underline focus:outline-none ${
+                    entry.isEntry
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
                 >
-                  {label}
+                  {entry.isEntry ? "Entry" : "Exit"}
                 </button>
               </div>
             </li>

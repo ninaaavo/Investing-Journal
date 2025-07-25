@@ -127,8 +127,8 @@ export default function JournalFilter({
                     className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 bg-[var(--color-nav-background)]"
                   >
                     <option value="">All Types</option>
-                    <option value="buy">Buy</option>
-                    <option value="sell">Sell</option>
+                    <option value="entry">Entry</option>
+                    <option value="exit">Exit</option>
                   </select>
                 </div>
 

@@ -1,18 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import MiniHoverCard from "./MiniHoverCard";
+import { useNavigate } from "react-router-dom";
 
 const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
 
-export default function SellJournalSummary({ selected }) {
+export default function ExitJournalSummary({ selected }) {
   const shares = parseFloat(selected.shares);
   const sellPrice = parseFloat(selected.exitPrice);
   const avgBuyPrice = parseFloat(selected.averageBuyPrice);
+  const direction = selected.direction?.toLowerCase() || "long";
   const timestamp = selected.entryTimestamp || selected.exitTimestamp;
 
   const hoverRef = useRef();
   const hoverTimeoutRef = useRef(null);
   const [hoverAnchor, setHoverAnchor] = useState(null);
   const [showHoverCard, setShowHoverCard] = useState(false);
+  const navigate = useNavigate();
 
   const handleMouseEnter = () => {
     clearTimeout(hoverTimeoutRef.current);
@@ -26,18 +29,33 @@ export default function SellJournalSummary({ selected }) {
       setShowHoverCard(false);
     }, 150);
   };
-  const realizedGain = (sellPrice-avgBuyPrice)*shares
+
+  const realizedGain = (sellPrice - avgBuyPrice) * shares * (direction === "short" ? -1 : 1);
 
   return (
     <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">
-      <span className="absolute top-10 right-8 px-3 py-1 text-sm rounded-full font-semibold bg-red-100 text-red-800">
-        Sell
-      </span>
+      <div className="absolute top-10 right-8 flex gap-2">
+        <button
+          onClick={() => navigate(`/journal?direction=${direction}&id=${selected.id}`)}
+          className={`px-3 py-1 text-sm rounded-full font-semibold hover:underline focus:outline-none ${
+            direction === "long"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-yellow-100 text-yellow-800"
+          }`}
+        >
+          {direction.charAt(0).toUpperCase() + direction.slice(1)}
+        </button>
+        <button
+          onClick={() => navigate(`/journal?type=exit&id=${selected.id}`)}
+          className="px-3 py-1 text-sm rounded-full font-semibold bg-red-100 text-red-800 hover:underline focus:outline-none"
+        >
+          Exit
+        </button>
+      </div>
 
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-primary">
-          {selected.ticker}{" "}
-          <span className="font-normal pb-1">({selected.companyName})</span>
+          {selected.ticker} <span className="font-normal pb-1">({selected.companyName})</span>
         </h2>
         <p className="text-sm text-[var(--color-text)]">
           {(() => {
@@ -54,7 +72,6 @@ export default function SellJournalSummary({ selected }) {
               const ampm = hours >= 12 ? "PM" : "AM";
               hours = hours % 12 || 12;
               const formattedHours = String(hours).padStart(2, "0");
-
               return `${formattedHours}:${minutes} ${ampm}, ${month}/${day}/${year}`;
             }
           })()}
@@ -63,23 +80,28 @@ export default function SellJournalSummary({ selected }) {
 
       <div className="grid grid-cols-3 gap-4 mb-6 text-sm text-[var(--color-text)]">
         <div>
-          <p className="font-medium">Share Bought:</p>
+          <p className="font-medium">
+            {direction === "short" ? "Shares Bought to Cover" : "Shares Bought"}:
+          </p>
           <p>{shares}</p>
         </div>
         <div>
-          <p className="font-medium">Average Buy Price:</p>
+          <p className="font-medium">
+            {direction === "short" ? "Average Cover Price" : "Average Buy Price"}:
+          </p>
           <p>${avgBuyPrice.toFixed(2)}</p>
         </div>
-        <div>
-          
-        </div>
+        <div></div>
+
         <div
           className="relative inline-block"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           <div ref={hoverRef} className="cursor-pointer pt-0.2">
-            <p className="font-medium">Shares Sold:</p>
+            <p className="font-medium">
+              {direction === "short" ? "Shares Sold to Open" : "Shares Sold"}:
+            </p>
             <span className="underline">{shares}</span>
           </div>
 
@@ -93,8 +115,11 @@ export default function SellJournalSummary({ selected }) {
             />
           )}
         </div>
+
         <div>
-          <p className="font-medium">Sold Price:</p>
+          <p className="font-medium">
+            {direction === "short" ? "Cover Price" : "Sold Price"}:
+          </p>
           <p>${sellPrice.toFixed(2)}</p>
         </div>
         <div>

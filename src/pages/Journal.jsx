@@ -195,18 +195,6 @@ export default function Journal() {
             />
           )}
         </AnimatePresence>
-
-        {/* {initialType === "sell" && (
-          <div className="absolute top-4 right-4 bg-white border border-gray-300 p-3 rounded-lg shadow-md text-sm z-50">
-            <p className="mb-2">Done reviewing past trades?</p>
-            <button
-              onClick={() => navigate(-1)}
-              className="px-3 py-1 bg-[var(--color-primary)] text-white rounded hover:opacity-90"
-            >
-              Return to Exit Form
-            </button>
-          </div>
-        )} */}
       </motion.div>
     </motion.div>
   );

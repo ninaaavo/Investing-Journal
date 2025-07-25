@@ -1,38 +1,25 @@
 import React, { useEffect, useRef, useState } from "react";
 import MiniHoverCard from "./MiniHoverCard";
+import { useNavigate } from "react-router-dom";
 
 const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
 
-export default function BuyJournalSummary({ selected }) {
+export default function EntryJournalSummary({ selected }) {
   const shares = parseFloat(selected.shares);
   const sharesSold = parseFloat(selected.totalSharesSold) || 0;
-  const buyPrice = parseFloat(selected.entryPrice);
+  const entryPrice = parseFloat(selected.entryPrice);
   const avgSoldPrice = parseFloat(selected.averageSoldPrice);
   const timestamp = selected.entryTimestamp || selected.exitTimestamp;
+  const direction = selected.direction?.toLowerCase() || "long";
 
   const hoverTimeoutRef = useRef(null);
-
-  const handleMouseEnter = () => {
-    clearTimeout(hoverTimeoutRef.current);
-    const rect = hoverRef.current?.getBoundingClientRect();
-    setHoverAnchor(rect);
-    setShowHoverCard(true);
-  };
-
-  const handleMouseLeave = () => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setShowHoverCard(false);
-    }, 150); // small delay for smoother UX
-  };
-
-  // Get all exitEvents from relatedEntries
-  const [currentPrice, setCurrentPrice] = useState(
-    selected.initialPrice ? parseFloat(selected.initialPrice) : null
-  );
-
   const hoverRef = useRef();
   const [hoverAnchor, setHoverAnchor] = useState(null);
   const [showHoverCard, setShowHoverCard] = useState(false);
+  const [currentPrice, setCurrentPrice] = useState(
+    selected.initialPrice ? parseFloat(selected.initialPrice) : null
+  );
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!selected.ticker) return;
@@ -52,27 +39,54 @@ export default function BuyJournalSummary({ selected }) {
     fetchPrice();
   }, [selected.ticker]);
 
+  const handleMouseEnter = () => {
+    clearTimeout(hoverTimeoutRef.current);
+    const rect = hoverRef.current?.getBoundingClientRect();
+    setHoverAnchor(rect);
+    setShowHoverCard(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setShowHoverCard(false);
+    }, 150);
+  };
+
   const sharesHeld = shares - sharesSold;
   const unrealizedGain = currentPrice
-    ? (currentPrice - buyPrice) * sharesHeld
+    ? (currentPrice - entryPrice) * sharesHeld * (direction === "short" ? -1 : 1)
     : 0;
-  const unrealizedPercent = sharesHeld == 0 ? 0 : currentPrice
-    ? ((currentPrice - buyPrice) / buyPrice) * 100
+  const unrealizedPercent = sharesHeld === 0 ? 0 : currentPrice
+    ? ((currentPrice - entryPrice) / entryPrice) * 100 * (direction === "short" ? -1 : 1)
     : 0;
 
-  const realizedGain = (avgSoldPrice - buyPrice) * sharesSold;
+  const realizedGain = (avgSoldPrice - entryPrice) * sharesSold * (direction === "short" ? -1 : 1);
   const isGain = unrealizedGain >= 0;
 
   return (
     <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">
-      <span className="absolute top-10 right-8 px-3 py-1 text-sm rounded-full font-semibold bg-green-100 text-green-800">
-        Buy
-      </span>
+      <div className="absolute top-10 right-8 flex gap-2">
+        <button
+          onClick={() => navigate(`/journal?direction=${direction}&id=${selected.id}`)}
+          className={`px-3 py-1 text-sm rounded-full font-semibold hover:underline focus:outline-none ${
+            direction === "long"
+              ? "bg-blue-100 text-blue-800"
+              : "bg-yellow-100 text-yellow-800"
+          }`}
+        >
+          {direction.charAt(0).toUpperCase() + direction.slice(1)}
+        </button>
+        <button
+          onClick={() => navigate(`/journal?type=entry&id=${selected.id}`)}
+          className="px-3 py-1 text-sm rounded-full font-semibold bg-green-100 text-green-800 hover:underline focus:outline-none"
+        >
+          Entry
+        </button>
+      </div>
 
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-primary">
-          {selected.ticker}{" "}
-          <span className="font-normal pb-1">({selected.companyName})</span>
+          {selected.ticker} <span className="font-normal pb-1">({selected.companyName})</span>
         </h2>
         <p className="text-sm text-[var(--color-text)]">
           {(() => {
@@ -89,7 +103,6 @@ export default function BuyJournalSummary({ selected }) {
               const ampm = hours >= 12 ? "PM" : "AM";
               hours = hours % 12 || 12;
               const formattedHours = String(hours).padStart(2, "0");
-
               return `${formattedHours}:${minutes} ${ampm}, ${month}/${day}/${year}`;
             }
           })()}
@@ -98,40 +111,26 @@ export default function BuyJournalSummary({ selected }) {
 
       <div className="grid grid-cols-3 gap-4 mb-6 text-sm text-[var(--color-text)]">
         <div>
-          <p className="font-medium">Total Bought:</p>
+          <p className="font-medium">Total {direction === "short" ? "Sold to Open" : "Bought"}:</p>
           <p>{shares}</p>
         </div>
         <div>
-          <p className="font-medium">Price Bought At:</p>
-          <p>${buyPrice.toFixed(2)}</p>
+          <p className="font-medium">Entry Price:</p>
+          <p>${entryPrice.toFixed(2)}</p>
         </div>
         <div>
           <p className="font-medium">
             Total {realizedGain + unrealizedGain >= 0 ? "Gain" : "Loss"}:
           </p>
-          <p
-            className={
-              realizedGain + unrealizedGain >= 0
-                ? "text-green-600"
-                : "text-red-500"
-            }
-          >
+          <p className={realizedGain + unrealizedGain >= 0 ? "text-green-600" : "text-red-500"}>
             ${(realizedGain + unrealizedGain).toFixed(2)} (
-            {(
-              ((realizedGain + unrealizedGain) / (buyPrice * shares)) *
-              100
-            ).toFixed(1)}
-            %)
+            {((realizedGain + unrealizedGain) / (entryPrice * shares) * 100).toFixed(1)}%)
           </p>
         </div>
-        <div
-          className="relative inline-block"
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <div ref={hoverRef} className="cursor-pointer pt-0.2">
-            <p className="font-medium">Shares Sold:</p>
 
+        <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+          <div ref={hoverRef} className="cursor-pointer pt-0.2">
+            <p className="font-medium">Shares Closed:</p>
             <span className="underline ">{sharesSold}</span>
           </div>
 
@@ -140,14 +139,14 @@ export default function BuyJournalSummary({ selected }) {
               show={showHoverCard}
               entries={selected.exitEvents || []}
               anchorRect={hoverAnchor}
-              onMouseEnter={handleMouseEnter} // 👈 we'll add these in next step
+              onMouseEnter={handleMouseEnter}
               onMouseLeave={handleMouseLeave}
             />
           )}
         </div>
 
         <div>
-          <p className="font-medium">Average Sold Price:</p>
+          <p className="font-medium">Average Close Price:</p>
           <p>${avgSoldPrice.toFixed(2)}</p>
         </div>
         <div>
@@ -156,7 +155,7 @@ export default function BuyJournalSummary({ selected }) {
           </p>
           <p className={realizedGain >= 0 ? "text-green-600" : "text-red-500"}>
             ${realizedGain.toFixed(2)} (
-            {((realizedGain / (buyPrice * sharesSold || 1)) * 100).toFixed(1)}%)
+            {((realizedGain / (entryPrice * sharesSold || 1)) * 100).toFixed(1)}%)
           </p>
         </div>
         <div>
@@ -165,11 +164,7 @@ export default function BuyJournalSummary({ selected }) {
         </div>
         <div>
           <p className="font-medium">Current Price:</p>
-          <p>
-            {currentPrice !== null
-              ? `$${currentPrice.toFixed(2)}`
-              : "Loading..."}
-          </p>
+          <p>{currentPrice !== null ? `$${currentPrice.toFixed(2)}` : "Loading..."}</p>
         </div>
         <div>
           <p className="font-medium">Unrealized {isGain ? "Gain" : "Loss"}:</p>

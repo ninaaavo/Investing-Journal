@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import BuyJournalSummary from "./BuyJournalSummary";
-import SellJournalSummary from "./SellJournalSummary";
+import EntryJournalSummary from "./EntryJournalSummary";
+import ExitJournalSummary from "./ExitJournalSummary";
 import ReasonJournalCard from "./ReasonJournalCard";
 import GenericTimelineCard from "./GenericTimelineCard";
 import InfoCard from "./InfoCard";
@@ -38,7 +38,7 @@ export default function JournalDetail({
     >
       {selected.isEntry ? (
         <div className="flex flex-wrap gap-[2%] w-full">
-          <BuyJournalSummary
+          <EntryJournalSummary
             selected={selected}
           />
 
@@ -89,7 +89,7 @@ export default function JournalDetail({
         </div>
       ) : (
         <div className="flex flex-wrap gap-[2%] w-full">
-          <SellJournalSummary selected={selected} />
+          <ExitJournalSummary selected={selected} />
 
           <SellReasonReviewCard
             checklistReview={selected.checklistReview || {}}
