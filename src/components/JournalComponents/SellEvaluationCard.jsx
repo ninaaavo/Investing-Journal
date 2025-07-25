@@ -13,7 +13,7 @@ export default function SellEvaluationCard({
   } = initialData;
 
   return (
-    <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)] h-[auto] max-h-[320px] overflow-y-auto scroll-stable space-y-4">
+    <div className="p-8 mt-4 bg-white shadow-[0_8px_30px_rgba(0,0,0,0.1)] rounded-xl w-[calc(32%)]  h-[300px]  overflow-y-auto scroll-stable space-y-4">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-xl font-semibold text-primary">{title}</h2>
       </div>
