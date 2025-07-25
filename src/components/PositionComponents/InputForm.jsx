@@ -24,6 +24,33 @@ export default function InputForm() {
   const [editCheckListMode, setEditCheckListMode] = useState(false);
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
+  const [invalidFields, setInvalidFields] = useState({});
+  const requiredFields = [
+    "ticker",
+    "shares",
+    "entryPrice",
+    "direction",
+    "timeframe",
+    "stopLoss",
+    "exitReason",
+  ];
+
+  const validateForm = () => {
+    const newInvalid = {};
+    let valid = true;
+
+    for (const field of requiredFields) {
+      if (!form[field] || form[field].toString().trim() === "") {
+        newInvalid[field] = true;
+        valid = false;
+      }
+    }
+
+    setInvalidFields(newInvalid);
+
+    if (!valid) toast.warn("Please complete all required fields.");
+    return valid;
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
@@ -143,6 +170,8 @@ export default function InputForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
+    if (!validateForm()) return;
+
     setIsSubmitting(true);
 
     const user = auth.currentUser;
@@ -492,9 +521,13 @@ export default function InputForm() {
             {/* Basic Info */}
             <div className="grid grid-cols-3 gap-6 auto-rows-auto">
               <div>
-                <span className="block font-medium">{"Ticker Name"}</span>
+                <span className="block font-medium">Ticker Name</span>
                 <TickerSearchInput
-                  styling={"w-full p-2 border rounded"}
+                  styling={`w-full p-2 border rounded transition-all duration-300 ${
+                    invalidFields.ticker
+                      ? "border-red-500 bg-red-50"
+                      : "border-gray-300"
+                  }`}
                   form={form}
                   onSelect={(ticker, name) =>
                     setForm((prev) => ({
@@ -504,6 +537,10 @@ export default function InputForm() {
                     }))
                   }
                 />
+                {/* Optional inline hint */}
+                {/* {invalidFields.ticker && (
+    <p className="text-xs text-red-500 mt-1 pl-1">This field is required</p>
+  )} */}
               </div>
 
               {[
@@ -534,7 +571,11 @@ export default function InputForm() {
                       name={field.name}
                       value={form[field.name]}
                       onChange={handleChange}
-                      className="w-full p-2 border rounded"
+                      className={`w-full p-2 border rounded transition-all duration-300 ${
+                        invalidFields[field.name]
+                          ? "border-red-500 bg-red-50"
+                          : "border-gray-300"
+                      }`}
                     >
                       <option value="">Select</option>
                       {field.options.map((option) => (
@@ -550,13 +591,17 @@ export default function InputForm() {
                       value={form[field.name]}
                       onChange={handleChange}
                       placeholder={field.placeholder}
-                      className="w-full p-2 border rounded"
+                      className={`w-full p-2 border rounded transition-all duration-300 ${
+                        invalidFields[field.name]
+                          ? "border-red-500 bg-red-50"
+                          : "border-gray-300"
+                      }`}
                     />
                   )}
                 </label>
               ))}
 
-              {/* Separate Mood Field */}
+              {/* Mood */}
               <label>
                 <span className="block font-medium">Mood at time of entry</span>
                 <select
@@ -584,6 +629,7 @@ export default function InputForm() {
                 </select>
               </label>
 
+              {/* Stop Loss */}
               <label>
                 <span className="block mb-1 font-medium">Stop Loss</span>
                 <input
@@ -592,7 +638,11 @@ export default function InputForm() {
                   value={form.stopLoss}
                   onChange={handleChange}
                   placeholder="e.g. 120"
-                  className="w-full p-2 border rounded"
+                  className={`w-full p-2 border rounded transition-all duration-300 ${
+                    invalidFields.stopLoss
+                      ? "border-red-500 bg-red-50"
+                      : "border-gray-300"
+                  }`}
                 />
                 {form.entryPrice && form.stopLoss && (
                   <p className="text-xs text-gray-500 mt-1 pl-1">
@@ -604,7 +654,7 @@ export default function InputForm() {
                     % downside risk
                   </p>
                 )}
-              </label>
+                </label>
 
               <RiskRewardInput form={form} setForm={setForm} />
 
@@ -640,25 +690,36 @@ export default function InputForm() {
                 label: `What makes you feel ${moodLabel}?`,
                 name: "moodReason",
                 placeholder: getPlaceholderForMood(moodLabel),
+                condition: !!moodLabel,
               },
-            ].map((field) => (
-              <label key={field.name} className="block">
-                <span className="block mb-1 font-medium">{field.label}</span>
-                <textarea
-                  name={field.name}
-                  value={
-                    field.name === "moodReason" ? moodReason : form[field.name]
-                  }
-                  onChange={
-                    field.name === "moodReason"
-                      ? (e) => setMoodReason(e.target.value)
-                      : handleChange
-                  }
-                  placeholder={field.placeholder}
-                  className="w-full p-2 border rounded"
-                />
-              </label>
-            ))}
+            ]
+              .filter(
+                (field) => field.condition === undefined || field.condition
+              )
+              .map((field) => (
+                <label key={field.name} className="block">
+                  <span className="block mb-1 font-medium">{field.label}</span>
+                  <textarea
+                    name={field.name}
+                    value={
+                      field.name === "moodReason"
+                        ? moodReason
+                        : form[field.name]
+                    }
+                    onChange={
+                      field.name === "moodReason"
+                        ? (e) => setMoodReason(e.target.value)
+                        : handleChange
+                    }
+                    placeholder={field.placeholder}
+                    className={`w-full p-2 border rounded transition-all duration-300 ${
+                      invalidFields[field.name]
+                        ? "border-red-500 bg-red-50"
+                        : "border-gray-300"
+                    }`}
+                  />
+                </label>
+              ))}
 
             <ConfidenceSlider
               value={form.confidence}

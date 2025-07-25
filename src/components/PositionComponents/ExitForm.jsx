@@ -49,6 +49,21 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [invalidFields, setInvalidFields] = useState({});
+  const validateFields = () => {
+    const newInvalids = {};
+
+    if (!form.exitPrice) newInvalids.exitPrice = true;
+    if (!form.shares) newInvalids.shares = true;
+    if (!form.exitReason) newInvalids.exitReason = true;
+    if (form.exitReason === "Other" && !form.exitNotes.trim()) {
+      newInvalids.exitNotes = true;
+    }
+
+    setInvalidFields(newInvalids);
+    return Object.keys(newInvalids).length === 0;
+  };
+
   const [form, setForm] = useState({
     entryChecklistMap: {},
     checklistReview: {},
@@ -130,6 +145,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return; // 🔒 block double submit
+    if (!validateFields()) return;
     if (!form.exitPrice || !form.shares || !form.exitReason) return;
 
     setIsSubmitting(true); // 🔃 start loading
@@ -385,6 +401,11 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     }
   }, [stock, form.shares]);
 
+  const inputClass = (field) =>
+    `w-full p-2 border rounded transition-all duration-300 ${
+      invalidFields[field] ? "border-red-500 bg-red-50" : "border-gray-300"
+    }`;
+
   return (
     <motion.form
       initial={{ opacity: 0, y: 10 }}
@@ -462,11 +483,24 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                 type="number"
                 value={form.exitPrice}
                 name="exitPrice"
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
+                onChange={(e) => {
+                  handleChange(e);
+                  if (e.target.value.trim() !== "") {
+                    setInvalidFields((prev) => ({ ...prev, exitPrice: false }));
+                  }
+                }}
+                className={`w-full p-2 border rounded transition-all duration-300 ${
+                  invalidFields?.exitPrice
+                    ? "border-red-500 bg-red-50"
+                    : "border-gray-300"
+                }`}
                 placeholder="e.g., 115.50"
-                required
               />
+              {invalidFields?.exitPrice && (
+                <p className="text-xs text-red-500 mt-1 pl-1">
+                  This field is required
+                </p>
+              )}
             </label>
 
             <label className="block">
@@ -490,16 +524,22 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                   } else {
                     setError("");
                     setField("shares", value);
+                    setInvalidFields((prev) => ({ ...prev, shares: false }));
                   }
                 }}
-                className="w-full p-2 border rounded"
+                className={`w-full p-2 border rounded transition-all duration-300 ${
+                  invalidFields?.shares
+                    ? "border-red-500 bg-red-50"
+                    : "border-gray-300"
+                }`}
                 placeholder="e.g., 5"
                 min={1}
                 max={stock.availableShares}
-                required
               />
-              {error && (
-                <p className="text-xs text-red-500 mt-1 pl-1">⚠️ {error}</p>
+              {(error || invalidFields?.shares) && (
+                <p className="text-xs text-red-500 mt-1 pl-1">
+                  {error || "This field is required"}
+                </p>
               )}
             </label>
 
@@ -545,9 +585,17 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
             <select
               value={form.exitReason}
               name="exitReason"
-              onChange={handleChange}
-              className="w-full p-2 border rounded"
-              required
+              onChange={(e) => {
+                handleChange(e);
+                if (e.target.value.trim() !== "") {
+                  setInvalidFields((prev) => ({ ...prev, exitReason: false }));
+                }
+              }}
+              className={`w-full p-2 border rounded transition-all duration-300 ${
+                invalidFields?.exitReason
+                  ? "border-red-500 bg-red-50"
+                  : "border-gray-300"
+              }`}
             >
               <option value="">Select a reason</option>
               {EXIT_REASONS.map((reason) => (
@@ -556,7 +604,14 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
                 </option>
               ))}
             </select>
+            {invalidFields?.exitReason && (
+              <p className="text-xs text-red-500 mt-1 pl-1">
+                This field is required
+              </p>
+            )}
           </label>
+          
+          
 
           {form.exitReason === "Other" && (
             <label className="block">
