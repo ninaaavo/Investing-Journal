@@ -20,6 +20,7 @@ import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
 export default function InputForm() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editCheckListMode, setEditCheckListMode] = useState(false);
   const [showExpandedForm, setShowExpandedForm] = useState(false);
   const [fadeKey, setFadeKey] = useState(0);
@@ -141,6 +142,8 @@ export default function InputForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
 
     const user = auth.currentUser;
     if (!user) {
@@ -215,11 +218,11 @@ export default function InputForm() {
         exitPlan: exitPlan,
         isClosed: false,
         totalSharesSold: 0,
-        averageSoldPrice:0,
+        averageSoldPrice: 0,
       };
 
       cleanedForm.entryPrice = parseFloat(cleanedForm.entryPrice);
-            cleanedForm.shares = parseInt(cleanedForm.shares);
+      cleanedForm.shares = parseInt(cleanedForm.shares);
 
       console.log("ur form", form);
       console.log("your cleaned form", cleanedForm);
@@ -349,7 +352,10 @@ export default function InputForm() {
         progress: undefined,
         theme: "colored",
       });
+      setIsSubmitting(false);
     } catch (error) {
+      setIsSubmitting(false);
+
       console.error("Error submitting journal:", error);
       toast.error("❌ Failed to submit entry. Please try again.");
     }
@@ -688,12 +694,17 @@ export default function InputForm() {
             </motion.button>
             <motion.button
               type="submit"
+              disabled={isSubmitting}
               whileHover={{ scale: 1.01 }}
               whileTap={{ scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              className="w-full rounded-md px-4 py-2 font-bold text-white bg-[var(--color-primary)] hover:opacity-80"
+              className={`w-full rounded-md px-4 py-2 font-bold text-white ${
+                isSubmitting
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[var(--color-primary)] hover:opacity-80"
+              }`}
             >
-              Submit Entry
+              {isSubmitting ? "Submitting..." : "Submit Entry"}
             </motion.button>
           </>
         )}
