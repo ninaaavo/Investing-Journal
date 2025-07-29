@@ -20,26 +20,13 @@ export default async function getOrGenerateSnapshot(dateStr) {
   const snapshotRef = doc(db, "users", user.uid, "snapshots", dateStr);
   const snapshotDoc = await getDoc(snapshotRef);
 
-  // ✅ If snapshot exists
-  if (snapshotDoc.exists()) {
-    return snapshotDoc.data();
-  }
+  // ✅ Already exists → return it
+  if (snapshotDoc.exists()) return snapshotDoc.data();
 
-  // 🕛 If it's today → just return live, don’t save
   const isToday = isSameDay(new Date(dateStr), new Date());
-  const userDoc = await getDoc(doc(db, "users", user.uid));
-  const accountCreatedAt = userDoc.exists()
-    ? userDoc.data().accountCreatedAt?.toDate?.()
-    : null;
-
-  if (!accountCreatedAt) throw new Error("Missing accountCreatedAt");
-
   const dateObj = new Date(dateStr);
-  if (dateObj < accountCreatedAt) {
-    throw new Error("Cannot create snapshot before account creation date");
-  }
 
-  // 📦 Find most recent snapshot before this date
+  // 🔍 Find the most recent snapshot before this date
   const snapshotsRef = collection(db, "users", user.uid, "snapshots");
   const q = query(
     snapshotsRef,
@@ -48,20 +35,24 @@ export default async function getOrGenerateSnapshot(dateStr) {
   );
 
   const prevSnapDocs = await getDocs(q);
-  const baseSnapshot = prevSnapDocs.empty ? {
-    totalAssets: 0,
-    cash: 0,
-    invested: 0,
-    netContribution: 0,
-    positions: []
-  } : prevSnapDocs.docs[0].data();
+  const baseSnapshot = prevSnapDocs.empty
+    ? {
+        totalAssets: 0,
+        cash: 0,
+        invested: 0,
+        netContribution: 0,
+        positions: [],
+      }
+    : prevSnapDocs.docs[0].data();
 
+  // 📦 Generate snapshot based on the closest one before
   const snapshot = await generateSnapshot({ date: dateStr, baseSnapshot });
 
+  // 💾 Save if not today
   if (!isToday) {
     await setDoc(snapshotRef, {
       ...snapshot,
-      createdAt: Timestamp.fromDate(new Date(dateStr)),
+      createdAt: Timestamp.fromDate(dateObj),
     });
   }
 
