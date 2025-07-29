@@ -16,6 +16,9 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
+import {
+  backfillSnapshotsFrom,
+} from "../../utils/snapshot/backfillSnapshotsFrom";
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
@@ -343,6 +346,53 @@ export default function InputForm() {
         preferredChecklist: updatedPreferredChecklist,
       });
 
+      const entryDateObj = form.entryTimestamp.toDate();
+const entryDateStr = entryDateObj.toISOString().split("T")[0];
+const today = new Date();
+const firstDayInDb = userSnap.data()?.firstSnapshotDate;
+const tradeCost = Number(form.shares) * Number(form.entryPrice);
+
+if (form.direction === "long") {
+  const prevCash = userSnap.data()?.cash ?? 0;
+  const newCash = prevCash - tradeCost;
+  await updateDoc(userRef, { cash: newCash });
+}
+// Only trigger snapshot logic if date is before today
+if (entryDateObj < today) {
+  // Case 1: earlier than firstSnapshotDate → update it
+  if (!firstDayInDb || entryDateStr < firstDayInDb) {
+    await updateDoc(userRef, { firstSnapshotDate: entryDateStr });
+
+    await backfillSnapshotsFrom({
+      userId: user.uid,
+      fromDate: entryDateObj,
+      newTrade: {
+        ticker: form.ticker.toUpperCase(),
+        shares: Number(form.shares),
+        averagePrice: Number(form.entryPrice),
+        direction: form.direction,
+        entryTimestamp: form.entryTimestamp,
+      },
+      tradeCost: form.direction === "long" ? tradeCost : 0,
+    });
+  } else {
+    // Case 2: between firstSnapshotDate and today → no change to firstSnapshotDate
+    await backfillSnapshotsFrom({
+      userId: user.uid,
+      fromDate: entryDateObj,
+      newTrade: {
+        ticker: form.ticker.toUpperCase(),
+        shares: Number(form.shares),
+        averagePrice: Number(form.entryPrice),
+        direction: form.direction,
+        entryTimestamp: form.entryTimestamp,
+      },
+      tradeCost: form.direction === "long" ? tradeCost : 0,
+    });
+  }
+}
+
+
       setShowExpandedForm(false);
       setForm({
         ticker: "",
@@ -654,7 +704,7 @@ export default function InputForm() {
                     % downside risk
                   </p>
                 )}
-                </label>
+              </label>
 
               <RiskRewardInput form={form} setForm={setForm} />
 

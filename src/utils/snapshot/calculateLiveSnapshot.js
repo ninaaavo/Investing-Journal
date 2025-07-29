@@ -1,6 +1,6 @@
 import { getDocs, collection } from "firebase/firestore";
-import { db, auth } from "../firebase"; // Adjust as needed
-import getStockPrices from "./getStockPrices"; // Make sure this returns a price map
+import { db, auth } from "../../firebase"; // Adjust as needed
+import getStockPrices from "../prices/getStockPrices"; // Make sure this returns a price map
 
 // Assumes: currentPositions is stored in Firestore under users/{uid}/currentPositions
 export async function calculateLiveSnapshot() {

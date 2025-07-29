@@ -1,11 +1,18 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import MetricsCard from "./MetricsCard.jsx";
+import { useUser } from "../../../context/UserContext";
 
 const FinancialMetricCard = () => {
   const [timeRange, setTimeRange] = useState("1D");
   const [dividendRange, setDividendRange] = useState("YTD");
-  const [cash, setCash] = useState(1250);
+
+  const { todaySnapshot } = useUser();
+  const isLoading = !todaySnapshot;
+
+  const cash = todaySnapshot?.cash ?? 0;
+  const invested = todaySnapshot?.invested ?? 0;
+  const totalAssets = todaySnapshot?.totalAssets ?? 0;
 
   const plValues = {
     "1D": "+$320 (3.2%)",
@@ -41,15 +48,18 @@ const FinancialMetricCard = () => {
         label: "Cash on Hand",
         editable: true,
         defaultValue: cash,
-        onValueChange: (value) => setCash(value),
+        onValueChange: (value) => {
+          // TODO: implement Firestore cash update + snapshot recalculation
+          console.log("User updated cash to:", value);
+        },
       },
       {
         label: "Money Investing",
-        value: "$3,200",
+        value: `$${invested.toLocaleString()}`,
       },
       {
         label: "Total Assets",
-        value: `$${(cash + 3200).toLocaleString()}`,
+        value: `$${totalAssets.toLocaleString()}`,
       },
       {
         label: "Dividend",
@@ -71,12 +81,14 @@ const FinancialMetricCard = () => {
         info: "Average annual cost of owning ETFs in your portfolio. Lower is usually better.",
       },
     ],
-    [timeRange, dividendRange, cash]
+    [timeRange, dividendRange, cash, invested, totalAssets]
   );
 
-  return (
-      <MetricsCard title="Financial Metrics" fields={financialFields} />
-  );
+  if (isLoading) {
+    return <div>Loading financial snapshot...</div>;
+  }
+
+  return <MetricsCard title="Financial Metrics" fields={financialFields} />;
 };
 
 export default FinancialMetricCard;

@@ -19,6 +19,7 @@ import {
   limit,
 } from "firebase/firestore";
 import DateTimeInput from "./DateTimeInput";
+import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
 
 function buildTimestamp(dateStr, timeStr) {
   if (!dateStr) return { timestamp: null, timeIncluded: false };
@@ -329,6 +330,34 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       }
 
       if (onSubmit) onSubmit(exitJournal);
+      // === Update user's cash ===
+const userRef = doc(db, "users", user.uid);
+const userSnap = await getDoc(userRef);
+const prevCash = userSnap.data()?.cash ?? 0;
+const cashFromSale = exitPrice * exitShares;
+const newCash = prevCash + cashFromSale;
+await updateDoc(userRef, { cash: newCash });
+
+// === Backfill snapshots if the exit is backdated ===
+const exitDateObj = timestamp.toDate();
+const today = new Date();
+if (exitDateObj < today) {
+ await backfillSnapshotsFrom({
+  userId: user.uid,
+  fromDate: timestamp.toDate(),
+  newTrade: {
+    ticker: stock.ticker.toUpperCase(),
+    shares: parseFloat(form.shares), // positive
+    averagePrice: parseFloat(form.exitPrice),
+    direction: stock.direction,
+    entryTimestamp: timestamp,
+  },
+  tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
+  isExit: true,
+});
+
+}
+
       setIsSubmitting(false); // ✅ done
     } catch (err) {
       setIsSubmitting(false);
