@@ -5,6 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
+import { initializeFirstSnapshot } from "../utils/snapshot/initializeFirstSnapshot"; // adjust path as needed
+
 
 export default function SignUp() {
   const [name, setName] = useState("");
@@ -22,15 +24,10 @@ export default function SignUp() {
     return acc;
   }, {});
 
-  const handleSignUp = async (e) => {
-    console.log("im handling sign up")
+ const handleSignUp = async (e) => {
   e.preventDefault();
   try {
-    const userCred = await createUserWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
+    const userCred = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCred.user;
 
     await updateProfile(user, { displayName: name });
@@ -42,6 +39,9 @@ export default function SignUp() {
       preferredChecklist: initialChecklist,
     });
 
+    // 🟢 Initialize snapshot and first day
+    await initializeFirstSnapshot(user.uid);
+
     navigate("/profile");
   } catch (error) {
     console.error("Sign up error:", error.message);
@@ -49,8 +49,9 @@ export default function SignUp() {
 };
 
 
+
  const handleGoogleSignUp = async () => {
-   try {
+  try {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
@@ -65,6 +66,9 @@ export default function SignUp() {
         createdAt: new Date(),
         preferredChecklist: initialChecklist,
       });
+
+      // 🟢 Initialize snapshot and first day
+      await initializeFirstSnapshot(user.uid);
     }
 
     navigate("/profile");
@@ -72,6 +76,7 @@ export default function SignUp() {
     console.error("Google login error:", error.message);
   }
 };
+
 
 
   return (
