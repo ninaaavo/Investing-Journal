@@ -1,28 +1,41 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import MetricsCard from "./MetricsCard.jsx";
 import { useUser } from "../../../context/UserContext";
-
+import { calculateLiveSnapshot } from "../../../utils/snapshot/calculateLiveSnapshot";
+import { getPLValuesFromSnapshots } from "../../../utils/getPLValuesFromSnapshots.js";
 const FinancialMetricCard = () => {
   const [timeRange, setTimeRange] = useState("1D");
   const [dividendRange, setDividendRange] = useState("YTD");
+  const [todaySnapshot, setTodaySnapshot] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  useEffect(() => {
+    async function fetchSnapshot() {
+      try {
+        const snapshot = await calculateLiveSnapshot();
+        setTodaySnapshot(snapshot);
+      } catch (error) {
+        console.error("Error fetching live snapshot:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
 
-  const { todaySnapshot } = useUser();
-  const isLoading = !todaySnapshot;
+    fetchSnapshot();
+  }, []);
 
+  const [plValues, setPlValues] = useState({});
+
+  useEffect(() => {
+  if (todaySnapshot) {
+    getPLValuesFromSnapshots(todaySnapshot).then(setPlValues);
+  }
+}, [todaySnapshot]);
+  console.log("your today snapshot is", todaySnapshot);
+  console.log("pl is", plValues)
   const cash = todaySnapshot?.cash ?? 0;
   const invested = todaySnapshot?.invested ?? 0;
   const totalAssets = todaySnapshot?.totalAssets ?? 0;
-
-  const plValues = {
-    "1D": "+$320 (3.2%)",
-    "1W": "+$780 (7.1%)",
-    "1M": "+$1,400 (12.5%)",
-    "3M": "+$2,340 (21.8%)",
-    "1Y": "+$5,600 (52.1%)",
-    All: "+$7,800 (81.2%)",
-  };
-
   const dividendValues = {
     YTD: "$432.75",
     "All Time": "$1,123.88",
