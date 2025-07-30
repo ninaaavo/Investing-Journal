@@ -1,3 +1,5 @@
+const BASE_URL = "https://yahoo-proxy-api.nina-vo.workers.dev";
+
 export async function fetchHistoricalPrices(tickers, date) {
   const results = {};
   const dateStr = date.toISOString().split("T")[0];
@@ -6,7 +8,7 @@ export async function fetchHistoricalPrices(tickers, date) {
 
   for (const ticker of tickers) {
     try {
-      const url = `https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/yahooPriceProxy?ticker=${ticker}&from=${period1}&to=${period2}`;
+      const url = `${BASE_URL}?ticker=${ticker}&from=${period1}&to=${period2}`;
       const res = await fetch(url);
       const data = await res.json();
 
