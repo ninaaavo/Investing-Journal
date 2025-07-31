@@ -9,6 +9,18 @@ import { auth } from "./firebase";
 import getOrGenerateSnapshot from "./utils/snapshot/getOrGenerateSnapshot";
 import { getDateStr } from "./utils/getDateStr";
 import { UserProvider } from "./context/UserContext";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  Timestamp,
+  collection,
+  query,
+  orderBy,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { db } from "./firebase";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -24,6 +36,46 @@ function App() {
         const today = getDateStr();
         const snap = await getOrGenerateSnapshot(today);
         setTodaySnapshot(snap);
+      }
+      if (currentUser) {
+        const today = getDateStr(); // e.g. "2025-07-31"
+        const snap = await getOrGenerateSnapshot(today);
+        setTodaySnapshot(snap);
+
+        const realizedPLRef = doc(
+          db,
+          "users",
+          currentUser.uid,
+          "realizedPLByDate",
+          today
+        );
+        const plDoc = await getDoc(realizedPLRef);
+
+        if (!plDoc.exists()) {
+          const previousPL = await getMostRecentRealizedPL(
+            currentUser.uid,
+            today
+          );
+
+          await setDoc(realizedPLRef, {
+            realizedPL: previousPL,
+            date: today,
+            createdAt: Timestamp.now(),
+          });
+        }
+      }
+      async function getMostRecentRealizedPL(userId, todayStr) {
+        const colRef = collection(db, "users", userId, "realizedPLByDate");
+        const q = query(
+          colRef,
+          where("date", "<", todayStr),
+          orderBy("date", "desc")
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          return snap.docs[0].data().realizedPL;
+        }
+        return 0;
       }
     });
     return () => unsub();
