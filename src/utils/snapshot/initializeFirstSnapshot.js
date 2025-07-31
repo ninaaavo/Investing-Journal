@@ -3,22 +3,29 @@ import { db } from "../../firebase";
 
 export async function initializeFirstSnapshot(userId) {
   const today = new Date();
+
+  // ⏪ Set to "yesterday" to match first day snapshot logic
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
+
   const yyyyMMdd = yesterday.toISOString().split("T")[0];
 
-  // 🔹 1. Create empty snapshot
+  // 🔹 1. Create daily snapshot with object-based `positions`
   const snapshotRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
   await setDoc(snapshotRef, {
+    date: yyyyMMdd,
+    totalCostBasis: 0,
+    totalMarketValue: 0,
+    unrealizedPL: 0,
+    totalPLPercent: 0,
     cash: 0,
-    invested: 0,
     totalAssets: 0,
     netContribution: 0,
-    positions: [],
+    positions: {}, // ✅ using object format instead of array
     createdAt: Timestamp.fromDate(yesterday),
   });
 
-  // 🔹 2. Create realized P/L record
+  // 🔹 2. Create initial realized profit/loss entry
   const realizedPLRef = doc(db, "users", userId, "realizedPLByDate", yyyyMMdd);
   await setDoc(realizedPLRef, {
     realizedPL: 0,
@@ -26,8 +33,9 @@ export async function initializeFirstSnapshot(userId) {
     createdAt: Timestamp.fromDate(yesterday),
   });
 
-  // 🔹 3. Track first snapshot date in user profile
-  await updateDoc(doc(db, "users", userId), {
+  // 🔹 3. Save first snapshot date to user profile
+  const userRef = doc(db, "users", userId);
+  await updateDoc(userRef, {
     firstSnapshotDate: yyyyMMdd,
   });
 }
