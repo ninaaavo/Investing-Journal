@@ -1,25 +1,36 @@
-const BASE_URL = "https://yahoo-proxy-api.nina-vo.workers.dev";
-
 export async function fetchHistoricalPrices(tickers, date) {
-  const results = {};
-  const dateStr = date.toISOString().split("T")[0];
-  const period1 = Math.floor(new Date(dateStr + "T00:00:00Z").getTime() / 1000);
-  const period2 = Math.floor(new Date(dateStr + "T23:59:59Z").getTime() / 1000);
+  const maxLookback = 10; // Avoid infinite loops
+  let attempts = 0;
 
-  for (const ticker of tickers) {
-    try {
-      const url = `${BASE_URL}?ticker=${ticker}&from=${period1}&to=${period2}`;
-      const res = await fetch(url);
-      const data = await res.json();
+  while (attempts < maxLookback) {
+    const dateStr = date.toISOString().split("T")[0];
+    const period1 = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
+    const period2 = Math.floor(new Date(`${dateStr}T23:59:59Z`).getTime() / 1000);
 
-      const result = data.chart?.result?.[0];
-      const close = result?.indicators?.quote?.[0]?.close?.[0];
-      results[ticker] = close ?? 0;
-    } catch (err) {
-      console.error(`Failed to fetch Yahoo price for ${ticker}:`, err);
-      results[ticker] = 0;
+    const allPrices = {};
+
+    for (const ticker of tickers) {
+      try {
+        const url = `https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/yahooPriceProxy?ticker=${ticker}&from=${period1}&to=${period2}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const close = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.[0];
+        allPrices[ticker] = close ?? 0;
+      } catch (err) {
+        console.error(`Failed to fetch Yahoo price for ${ticker} on ${dateStr}:`, err);
+        allPrices[ticker] = 0;
+      }
     }
+
+    const allValid = Object.values(allPrices).every((price) => price > 0);
+    if (allValid) return allPrices;
+
+    // Go back 1 day and try again
+    date.setDate(date.getDate() - 1);
+    attempts++;
   }
 
-  return results;
+  // As fallback, return 0s
+  return tickers.reduce((acc, ticker) => ({ ...acc, [ticker]: 0 }), {});
 }
