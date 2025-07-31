@@ -17,7 +17,9 @@ import {
   orderBy,
   Timestamp,
   limit,
+  increment,
 } from "firebase/firestore";
+import { getDateStr } from "../../utils/getDateStr"; // format: YYYY-MM-DD
 import DateTimeInput from "./DateTimeInput";
 import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
 
@@ -331,33 +333,49 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
       if (onSubmit) onSubmit(exitJournal);
       // === Update user's cash ===
-const userRef = doc(db, "users", user.uid);
-const userSnap = await getDoc(userRef);
-const prevCash = userSnap.data()?.cash ?? 0;
-const cashFromSale = exitPrice * exitShares;
-const newCash = prevCash + cashFromSale;
-await updateDoc(userRef, { cash: newCash });
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      const prevCash = userSnap.data()?.cash ?? 0;
+      const cashFromSale = exitPrice * exitShares;
+      const newCash = prevCash + cashFromSale;
+      await updateDoc(userRef, { cash: newCash });
 
-// === Backfill snapshots if the exit is backdated ===
-const exitDateObj = timestamp.toDate();
-const today = new Date();
-if (exitDateObj < today) {
- await backfillSnapshotsFrom({
-  userId: user.uid,
-  fromDate: timestamp.toDate(),
-  newTrade: {
-    ticker: stock.ticker.toUpperCase(),
-    shares: parseFloat(form.shares), // positive
-    averagePrice: parseFloat(form.exitPrice),
-    direction: stock.direction,
-    entryTimestamp: timestamp,
-  },
-  tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
-  isExit: true,
-});
+      // === Backfill snapshots if the exit is backdated ===
+      const exitDateObj = timestamp.toDate();
+      const today = new Date();
+      if (exitDateObj < today) {
+        await backfillSnapshotsFrom({
+          userId: user.uid,
+          fromDate: timestamp.toDate(),
+          newTrade: {
+            ticker: stock.ticker.toUpperCase(),
+            shares: parseFloat(form.shares), // positive
+            averagePrice: parseFloat(form.exitPrice),
+            direction: stock.direction,
+            entryTimestamp: timestamp,
+          },
+          tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
+          isExit: true,
+        });
+      }
+      const dateStr = getDateStr(timestamp.toDate()); // Use the backdated timestamp, not today
+      const plRef = doc(db, "users", user.uid, "realizedPLByDate", dateStr);
+      const plSnap = await getDoc(plRef);
+      const prevPL = plSnap.exists() ? plSnap.data().realizedPL : 0;
+      const updatedPL = prevPL + pAndL;
 
-}
-
+      if (plSnap.exists()) {
+        await updateDoc(plRef, {
+          realizedPL: updatedPL,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(plRef, {
+          realizedPL: updatedPL,
+          date: dateStr,
+          createdAt: serverTimestamp(),
+        });
+      }
       setIsSubmitting(false); // ✅ done
     } catch (err) {
       setIsSubmitting(false);
@@ -639,8 +657,6 @@ if (exitDateObj < today) {
               </p>
             )}
           </label>
-          
-          
 
           {form.exitReason === "Other" && (
             <label className="block">
