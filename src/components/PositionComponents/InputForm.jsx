@@ -16,9 +16,7 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
-import {
-  backfillSnapshotsFrom,
-} from "../../utils/snapshot/backfillSnapshotsFrom";
+import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
@@ -347,51 +345,49 @@ export default function InputForm() {
       });
 
       const entryDateObj = form.entryTimestamp.toDate();
-const entryDateStr = entryDateObj.toISOString().split("T")[0];
-const today = new Date();
-const firstDayInDb = userSnap.data()?.firstSnapshotDate;
-const tradeCost = Number(form.shares) * Number(form.entryPrice);
+      const entryDateStr = entryDateObj.toISOString().split("T")[0];
+      const today = new Date();
+      const firstDayInDb = userSnap.data()?.firstSnapshotDate;
+      const tradeCost = Number(form.shares) * Number(form.entryPrice);
 
-if (form.direction === "long") {
-  const prevCash = userSnap.data()?.cash ?? 0;
-  const newCash = prevCash - tradeCost;
-  await updateDoc(userRef, { cash: newCash });
-}
-// Only trigger snapshot logic if date is before today
-if (entryDateObj < today) {
-  // Case 1: earlier than firstSnapshotDate → update it
-  if (!firstDayInDb || entryDateStr < firstDayInDb) {
-    await updateDoc(userRef, { firstSnapshotDate: entryDateStr });
+      if (form.direction === "long") {
+        const prevCash = userSnap.data()?.cash ?? 0;
+        const newCash = prevCash - tradeCost;
+        await updateDoc(userRef, { cash: newCash });
+      }
+      // Only trigger snapshot logic if date is before today
+      if (entryDateObj < today) {
+        console.log("im in pre backfill");
 
-    await backfillSnapshotsFrom({
-      userId: user.uid,
-      fromDate: entryDateObj,
-      newTrade: {
-        ticker: form.ticker.toUpperCase(),
-        shares: Number(form.shares),
-        averagePrice: Number(form.entryPrice),
-        direction: form.direction,
-        entryTimestamp: form.entryTimestamp,
-      },
-      tradeCost: form.direction === "long" ? tradeCost : 0,
-    });
-  } else {
-    // Case 2: between firstSnapshotDate and today → no change to firstSnapshotDate
-    await backfillSnapshotsFrom({
-      userId: user.uid,
-      fromDate: entryDateObj,
-      newTrade: {
-        ticker: form.ticker.toUpperCase(),
-        shares: Number(form.shares),
-        averagePrice: Number(form.entryPrice),
-        direction: form.direction,
-        entryTimestamp: form.entryTimestamp,
-      },
-      tradeCost: form.direction === "long" ? tradeCost : 0,
-    });
-  }
-}
+        const tradeDetails = {
+          userId: user.uid,
+          fromDate: entryDateObj,
+          newTrade: {
+            ticker: form.ticker.toUpperCase(),
+            shares: Number(form.shares),
+            averagePrice: Number(form.entryPrice),
+            direction: form.direction,
+            entryTimestamp: form.entryTimestamp,
+          },
+          tradeCost: form.direction === "long" ? tradeCost : 0,
+        };
 
+        // Case 1: update firstSnapshotDate if earlier
+        if (!firstDayInDb || entryDateStr < firstDayInDb) {
+          updateDoc(userRef, { firstSnapshotDate: entryDateStr }).catch((err) =>
+            console.error("Failed to update firstSnapshotDate:", err)
+          );
+        }
+        toast.info("⏳ Backfilling snapshots in background...", {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
+
+        // ✅ Fire-and-forget: run snapshot logic in background
+        backfillSnapshotsFrom(tradeDetails).catch((err) =>
+          console.error("❌ Backfill failed in background:", err)
+        );
+      }
 
       setShowExpandedForm(false);
       setForm({

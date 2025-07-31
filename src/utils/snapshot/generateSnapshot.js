@@ -1,9 +1,8 @@
 import { auth, db } from "../../firebase";
-import getStockPrices from "../prices/getStockPrices"; // uses live prices
-import getHistoricPrices from "../prices/getHistoricPrices"; // uses historical prices
+import getStockPrices from "../prices/getStockPrices";
+import getHistoricPrices from "../prices/getHistoricPrices";
 import { Timestamp, collection, getDocs, doc } from "firebase/firestore";
 
-// Utility: format price safely
 const safeParse = (val) => parseFloat(val || 0);
 
 export default async function generateSnapshot({
@@ -13,63 +12,77 @@ export default async function generateSnapshot({
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
-  // === Get position data ===
   const positionsRef = collection(db, "users", user.uid, "currentPositions");
   const positionsSnap = await getDocs(positionsRef);
 
-  const positions = [];
+  const rawPositions = [];
   const tickers = [];
 
   positionsSnap.forEach((doc) => {
     const data = doc.data();
     if (!data.ticker || !data.shares) return;
 
-    positions.push({ id: doc.id, ...data });
+    rawPositions.push({ id: doc.id, ...data });
     tickers.push(data.ticker);
   });
 
-  // === Decide data source ===
-  let priceMap = {};
-  if (date === null) {
-    priceMap = await getStockPrices(tickers);
-  } else {
-    priceMap = await getHistoricPrices(tickers, date);
-  }
+  // === Price lookup ===
+  const priceMap =
+    date === null
+      ? await getStockPrices(tickers)
+      : await getHistoricPrices(tickers, date);
 
-  // === Use fallback baseSnapshot or default values ===
+  console.log("Your price map is", priceMap);
+
   const cash = safeParse(baseSnapshot?.cash);
   const netContribution = safeParse(baseSnapshot?.netContribution);
-  const heldPositions = baseSnapshot?.positions || positions;
+  const prevPositions = baseSnapshot?.positions || {};
 
-  // === Calculate invested & enrich positions ===
-  let invested = 0;
+  let totalMarketValue = 0;
+  let totalCostBasis = 0;
+  let unrealizedPL = 0;
 
-  const enrichedPositions = heldPositions.map((pos) => {
-    const currentPrice = safeParse(priceMap[pos.ticker]);
+  const enrichedPositions = {};
+
+  for (const pos of rawPositions) {
+    const price = safeParse(priceMap[pos.ticker]);
     const shares = safeParse(pos.shares);
-    const avgPrice = safeParse(pos.averagePriceFromFIFO);
+    const fifoStack = pos.fifoStack || [];
 
-    const currentValue = shares * currentPrice;
-    const unrealizedPL = currentValue - shares * avgPrice;
+    const costBasis = fifoStack.reduce(
+      (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),
+      0
+    );
+    const marketValue = shares * price;
+    const posUnrealizedPL = marketValue - costBasis;
 
-    invested += currentValue;
+    totalMarketValue += marketValue;
+    totalCostBasis += costBasis;
+    unrealizedPL += posUnrealizedPL;
 
-    return {
+    enrichedPositions[pos.ticker] = {
       ...pos,
-      priceAtSnapshot: currentPrice,
-      currentValue,
-      unrealizedPL,
+      priceAtSnapshot: price,
+      currentValue: marketValue,
+      costBasis,
+      unrealizedPL: posUnrealizedPL,
     };
-  });
+  }
 
-  const totalAssets = cash + invested;
+  const totalAssets = totalMarketValue + cash;
+  const totalPLPercent =
+    totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
   return {
-    totalAssets,
-    invested,
     cash,
+    invested: totalMarketValue,
+    totalAssets,
     netContribution,
-    positions: enrichedPositions,
+    positions: enrichedPositions, // ✅ converted to object format
+    unrealizedPL,
+    totalCostBasis,
+    totalMarketValue,
+    totalPLPercent,
     createdAt: Timestamp.now(),
   };
 }

@@ -1,8 +1,9 @@
-import { getDocs, collection } from "firebase/firestore";
-import { db, auth } from "../../firebase"; // Adjust as needed
-import getStockPrices from "../prices/getStockPrices"; // Make sure this returns a price map
+import { getDocs, collection, doc, getDoc, Timestamp } from "firebase/firestore";
+import { db, auth } from "../../firebase";
+import getStockPrices from "../prices/getStockPrices";
 
-// Assumes: currentPositions is stored in Firestore under users/{uid}/currentPositions
+const safeParse = (val) => parseFloat(val || 0);
+
 export async function calculateLiveSnapshot() {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
@@ -10,55 +11,77 @@ export async function calculateLiveSnapshot() {
   const positionsRef = collection(db, "users", user.uid, "currentPositions");
   const positionsSnap = await getDocs(positionsRef);
 
-  let totalInvested = 0;
-  let positions = [];
-  let tickers = [];
+  const rawPositions = [];
+  const tickers = [];
 
   positionsSnap.forEach((doc) => {
     const data = doc.data();
     if (!data.ticker || !data.shares) return;
-
-    positions.push({ id: doc.id, ...data });
+    rawPositions.push({ id: doc.id, ...data });
     tickers.push(data.ticker);
-    totalInvested += parseFloat(data.averagePriceFromFIFO || 0) * parseFloat(data.shares);
   });
 
-  // Get live prices
   const priceMap = await getStockPrices(tickers);
 
-  let marketValue = 0;
-  const enrichedPositions = positions.map((pos) => {
-    const currentPrice = priceMap[pos.ticker] || 0;
-    const shares = parseFloat(pos.shares);
-    const avgBuy = parseFloat(pos.averagePriceFromFIFO || 0);
-    const currentVal = shares * currentPrice;
+  // Get financial metrics
+  const financialRef = doc(db, "users", user.uid, "metrics", "financial");
+  const financialSnap = await getDoc(financialRef);
+  const financialData = financialSnap.exists() ? financialSnap.data() : {};
 
-    marketValue += currentVal;
+  const cash = safeParse(financialData.cash);
+  const netContribution = safeParse(financialData.netContribution);
 
-    return {
-      ...pos,
-      currentPrice,
-      currentValue: currentVal,
-      unrealizedPL: currentVal - avgBuy * shares,
-    };
-  });
+  let totalMarketValue = 0;
+  let totalCostBasis = 0;
+  let unrealizedPL = 0;
+  const enrichedPositions = {};
 
-  // Get user cash (safe to assume it's stored in `users/{uid}/metrics/financial`)
-  const cashSnap = await getDocs(collection(db, "users", user.uid, "metrics"));
-  let cash = 0;
-  cashSnap.forEach((doc) => {
-    if (doc.id === "financial") {
-      const data = doc.data();
-      cash = parseFloat(data.cash || 0);
+  for (const pos of rawPositions) {
+    const price = safeParse(priceMap[pos.ticker]);
+    const shares = safeParse(pos.shares);
+
+    const fifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
+
+    // Cost basis from FIFO
+    let costBasis = fifoStack.reduce(
+      (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),
+      0
+    );
+
+    // Fallback to averagePrice if FIFO is empty or invalid
+    if (costBasis === 0 && pos.averagePrice && shares > 0) {
+      costBasis = shares * safeParse(pos.averagePrice);
     }
-  });
 
-  const totalAssets = marketValue + cash;
+    const marketValue = shares * price;
+    const posUnrealizedPL = marketValue - costBasis;
+
+    totalMarketValue += marketValue;
+    totalCostBasis += costBasis;
+    unrealizedPL += posUnrealizedPL;
+
+    enrichedPositions[pos.ticker] = {
+      ...pos,
+      priceAtSnapshot: price,
+      currentValue: marketValue,
+      costBasis,
+      unrealizedPL: posUnrealizedPL,
+    };
+  }
+
+  const totalAssets = totalMarketValue + cash;
+  const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
   return {
-    totalAssets,
-    invested: marketValue,
     cash,
+    invested: totalMarketValue,
+    totalAssets,
+    netContribution,
     positions: enrichedPositions,
+    unrealizedPL,
+    totalCostBasis,
+    totalMarketValue,
+    totalPLPercent,
+    createdAt: Timestamp.now(),
   };
 }
