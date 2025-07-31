@@ -1,5 +1,14 @@
-export async function fetchHistoricalPrices(tickers, date) {
-  const maxLookback = 10; // Avoid infinite loops
+const BASE_URL = "https://yahoo-proxy-api.nina-vo.workers.dev";
+
+export async function fetchHistoricalPrices(tickers, initialDate) {
+  const maxLookback = 10;
+  const fetchedPrices = {};
+
+  tickers.forEach((ticker) => {
+    fetchedPrices[ticker] = 0; // default to 0
+  });
+
+  const date = new Date(initialDate); // clone so you don’t mutate original
   let attempts = 0;
 
   while (attempts < maxLookback) {
@@ -7,30 +16,34 @@ export async function fetchHistoricalPrices(tickers, date) {
     const period1 = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
     const period2 = Math.floor(new Date(`${dateStr}T23:59:59Z`).getTime() / 1000);
 
-    const allPrices = {};
+    console.log(`🔍 Trying price lookup for ${dateStr}`);
 
     for (const ticker of tickers) {
+      if (fetchedPrices[ticker] > 0) continue;
+
       try {
-        const url = `https://us-central1-YOUR_PROJECT_ID.cloudfunctions.net/yahooPriceProxy?ticker=${ticker}&from=${period1}&to=${period2}`;
+        const url = `${BASE_URL}?ticker=${ticker}&from=${period1}&to=${period2}`;
         const res = await fetch(url);
         const data = await res.json();
 
-        const close = data.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.[0];
-        allPrices[ticker] = close ?? 0;
+        const result = data.chart?.result?.[0];
+        const close = result?.indicators?.quote?.[0]?.close?.[0];
+
+        if (close != null && !isNaN(close)) {
+          fetchedPrices[ticker] = close;
+        }
       } catch (err) {
-        console.error(`Failed to fetch Yahoo price for ${ticker} on ${dateStr}:`, err);
-        allPrices[ticker] = 0;
+        console.error(`❌ Failed to fetch price for ${ticker} on ${dateStr}:`, err);
       }
     }
 
-    const allValid = Object.values(allPrices).every((price) => price > 0);
-    if (allValid) return allPrices;
+    const allFound = Object.values(fetchedPrices).every((p) => p > 0);
+    if (allFound) break;
 
-    // Go back 1 day and try again
+    // ⏪ Fallback: try previous date
     date.setDate(date.getDate() - 1);
     attempts++;
   }
 
-  // As fallback, return 0s
-  return tickers.reduce((acc, ticker) => ({ ...acc, [ticker]: 0 }), {});
+  return fetchedPrices;
 }
