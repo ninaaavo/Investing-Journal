@@ -1,21 +1,3 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-  Timestamp,
-  getDocs,
-  collection,
-} from "firebase/firestore";
-import { db } from "../../firebase";
-import { fetchHistoricalPrices } from "../fetchHistoricalPrices";
-
-/**
- * @param {string} userId - Firestore UID
- * @param {Date} fromDate - Start date for backfill
- * @param {Object} newTrade - { ticker, shares, averagePrice, direction, entryTimestamp }
- * @param {number} tradeCost - Proceeds (positive for sell, negative for buy)
- * @param {boolean} isExit - If this is an exit trade
- */
 export async function backfillSnapshotsFrom({
   userId,
   fromDate,
@@ -23,11 +5,20 @@ export async function backfillSnapshotsFrom({
   tradeCost,
   isExit = false,
 }) {
-  const today = new Date();
+  console.log("backfill is being called");
+  console.log(
+    "im backfill snap shot, i receive new trade info being",
+    newTrade,
+    "with trade cost",
+    tradeCost
+  );
+
+  const yesterday = new Date(); // ← New
+  yesterday.setDate(yesterday.getDate() - 1); // ← New
   const cursor = new Date(fromDate);
   const tickers = [newTrade.ticker];
 
-  while (cursor <= today) {
+  while (cursor <= yesterday) { // ← Modified condition
     const yyyyMMdd = cursor.toISOString().split("T")[0];
     const snapRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
 
@@ -42,109 +33,106 @@ export async function backfillSnapshotsFrom({
     );
 
     const snapDoc = await getDoc(snapRef);
-
     let baseCash = 0;
-    let basePositions = [];
+    let basePositions = {};
+
+    const ticker = newTrade.ticker;
+    const shares = newTrade.shares;
+    const isShort = newTrade.direction === "short";
 
     if (snapDoc.exists()) {
       const data = snapDoc.data();
       baseCash = data.cash ?? 0;
-      basePositions = data.positions ?? [];
+      basePositions = structuredClone(data.positions ?? {});
     } else {
       const prevSnapDoc = await getDoc(prevSnapRef);
       if (prevSnapDoc.exists()) {
         const prevData = prevSnapDoc.data();
         baseCash = prevData.cash ?? 0;
-        basePositions = prevData.positions ?? [];
+        basePositions = structuredClone(prevData.positions ?? {});
       }
     }
 
-    const isFirstDay =
-      yyyyMMdd === newTrade.entryTimestamp.toDate().toISOString().split("T")[0];
-
-    const updatedPositions = basePositions.map((p) => ({ ...p }));
-    const existing = updatedPositions.find(
-      (p) => p.ticker === newTrade.ticker
-    );
-
+    const positions = structuredClone(basePositions);
     let updatedCash = baseCash;
 
-    if (isFirstDay) {
-      const isShort = newTrade.direction === "short";
-      const shares = newTrade.shares;
-
-      if (isExit) {
-        // 🟥 Exit (long sell or short cover)
-        if (existing) {
-          if (isShort) {
-            // Covering short: increase (closer to zero)
-            existing.shares += shares;
-
-            if (existing.shares >= 0) {
-              // fully covered
-              const idx = updatedPositions.findIndex(
-                (p) => p.ticker === newTrade.ticker
-              );
-              if (idx !== -1) updatedPositions.splice(idx, 1);
-            }
-            updatedCash -= tradeCost;
-          } else {
-            // Selling long
-            existing.shares -= shares;
-
-            if (existing.shares <= 0) {
-              const idx = updatedPositions.findIndex(
-                (p) => p.ticker === newTrade.ticker
-              );
-              if (idx !== -1) updatedPositions.splice(idx, 1);
-            }
-            updatedCash += tradeCost;
-          }
-        }
-      } else {
-        // 🟩 Entry (buy or short sell)
-        if (!existing) {
-          updatedPositions.push({
-            ticker: newTrade.ticker,
-            shares: isShort ? -shares : shares,
-            averagePriceFromFIFO: newTrade.averagePrice,
-            currentPrice: 0,
-            priceAtSnapshot: 0,
-            currentValue: 0,
-            unrealizedPL: 0,
-          });
+    // Apply trade
+    if (isExit) {
+      if (positions[ticker]) {
+        if (isShort) {
+          positions[ticker].shares += shares;
+          if (positions[ticker].shares >= 0) delete positions[ticker];
+          updatedCash -= tradeCost;
         } else {
-          existing.shares += isShort ? -shares : shares;
-          // Optionally recalculate averagePriceFromFIFO (omitted here)
+          positions[ticker].shares -= shares;
+          if (positions[ticker].shares <= 0) delete positions[ticker];
+          updatedCash += tradeCost;
         }
-
-        updatedCash += isShort ? tradeCost : -tradeCost;
       }
+    } else {
+      if (!positions[ticker]) {
+        positions[ticker] = {
+          shares: isShort ? -shares : shares,
+          fifoStack: [
+            {
+              shares: shares,
+              price: newTrade.averagePrice,
+            },
+          ],
+        };
+      } else {
+        positions[ticker].shares += isShort ? -shares : shares;
+        positions[ticker].fifoStack.push({
+          shares: shares,
+          price: newTrade.averagePrice,
+        });
+      }
+
+      updatedCash += isShort ? tradeCost : -tradeCost;
     }
 
-    // === Update prices and value ===
     const prices = await fetchHistoricalPrices(tickers, cursor);
-    updatedPositions.forEach((p) => {
-      const price = prices[p.ticker] ?? 0;
-      p.currentPrice = price;
-      p.priceAtSnapshot = price;
-      p.currentValue = price * p.shares;
-      p.unrealizedPL =
-        (price - p.averagePriceFromFIFO) * p.shares;
-    });
+    let totalMarketValue = 0;
+    let totalCostBasis = 0;
+    let unrealizedPL = 0;
 
-    const invested = updatedPositions.reduce(
-      (sum, p) => sum + p.currentValue,
-      0
-    );
-    const totalAssets = updatedCash + invested;
+    for (const ticker in positions) {
+      const price = prices[ticker] ?? 0;
+      const pos = positions[ticker];
+      const shares = pos.shares;
+      const fifoStack = pos.fifoStack || [];
+
+      const costBasis = fifoStack.reduce(
+        (sum, lot) => sum + lot.shares * lot.price,
+        0
+      );
+      const marketValue = shares * price;
+      const pl = marketValue - costBasis;
+
+      positions[ticker].priceAtSnapshot = price;
+      positions[ticker].marketValue = marketValue;
+      positions[ticker].costBasis = costBasis;
+      positions[ticker].unrealizedPL = pl;
+
+      totalMarketValue += marketValue;
+      totalCostBasis += costBasis;
+      unrealizedPL += pl;
+    }
+
+    const totalAssets = totalMarketValue + updatedCash;
+    const totalPLPercent =
+      totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     await setDoc(snapRef, {
+      date: yyyyMMdd,
       cash: updatedCash,
-      invested,
       totalAssets,
+      totalCostBasis,
+      totalMarketValue,
+      unrealizedPL,
+      totalPLPercent,
+      positions,
       netContribution: 0,
-      positions: updatedPositions,
       createdAt: Timestamp.fromDate(new Date(yyyyMMdd)),
     });
 
