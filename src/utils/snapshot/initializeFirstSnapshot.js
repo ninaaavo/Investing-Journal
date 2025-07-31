@@ -7,6 +7,7 @@ export async function initializeFirstSnapshot(userId) {
   yesterday.setDate(today.getDate() - 1);
   const yyyyMMdd = yesterday.toISOString().split("T")[0];
 
+  // 🔹 1. Create empty snapshot
   const snapshotRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
   await setDoc(snapshotRef, {
     cash: 0,
@@ -17,6 +18,15 @@ export async function initializeFirstSnapshot(userId) {
     createdAt: Timestamp.fromDate(yesterday),
   });
 
+  // 🔹 2. Create realized P/L record
+  const realizedPLRef = doc(db, "users", userId, "realizedPLByDate", yyyyMMdd);
+  await setDoc(realizedPLRef, {
+    realizedPL: 0,
+    date: yyyyMMdd,
+    createdAt: Timestamp.fromDate(yesterday),
+  });
+
+  // 🔹 3. Track first snapshot date in user profile
   await updateDoc(doc(db, "users", userId), {
     firstSnapshotDate: yyyyMMdd,
   });
