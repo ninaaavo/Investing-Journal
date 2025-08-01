@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { signInWithPopup, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { initializeFirstSnapshot } from "../utils/snapshot/initializeFirstSnapshot"; // adjust path as needed
+import { initializeFirstData } from "../utils/snapshot/initializeFirstData"; // adjust path as needed
 
 
 export default function SignUp() {
@@ -40,7 +40,7 @@ export default function SignUp() {
     });
 
     // 🟢 Initialize snapshot and first day
-    await initializeFirstSnapshot(user.uid);
+    await initializeFirstData(user.uid);
 
     navigate("/profile");
   } catch (error) {
@@ -68,7 +68,7 @@ export default function SignUp() {
       });
 
       // 🟢 Initialize snapshot and first day
-      await initializeFirstSnapshot(user.uid);
+      await initializeFirstData(user.uid);
     }
 
     navigate("/profile");

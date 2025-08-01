@@ -22,6 +22,7 @@ import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
 import { useUser } from "../../context/UserContext";
+import { getDateStr } from "../../utils/getDateStr";
 
 export default function InputForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -350,6 +351,38 @@ export default function InputForm() {
       // Only trigger snapshot logic if date is before today
       if (entryDateObj < today) {
         console.log("im in pre backfill");
+        // 🔹 Calculate holding duration at entry (if backdated)
+        if (entryDateObj < today) {
+          const daysHeld = (today - entryDateObj) / (1000 * 60 * 60 * 24);
+          const capital = Number(form.shares) * Number(form.entryPrice);
+          const addedDays = daysHeld * capital;
+
+          const statsRef = doc(
+            db,
+            "users",
+            user.uid,
+            "stats",
+            "holdingDuration"
+          );
+          const statsSnap = await getDoc(statsRef);
+
+          if (statsSnap.exists()) {
+            const statsData = statsSnap.data();
+            const updatedDays = (statsData.totalHoldingDays ?? 0) + addedDays;
+            const updatedCapital = (statsData.totalCapital ?? 0) + capital;
+
+            await updateDoc(statsRef, {
+              totalHoldingDays: updatedDays,
+              totalCapital: updatedCapital,
+            });
+          } else {
+            await setDoc(statsRef, {
+              totalHoldingDays: addedDays,
+              totalCapital: capital,
+              lastUpdatedDate: getDateStr(), // just to initialize
+            });
+          }
+        }
 
         const tradeDetails = {
           userId: user.uid,

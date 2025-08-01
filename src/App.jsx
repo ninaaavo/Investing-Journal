@@ -9,6 +9,7 @@ import { auth } from "./firebase";
 import getOrGenerateSnapshot from "./utils/snapshot/getOrGenerateSnapshot";
 import { getDateStr } from "./utils/getDateStr";
 import { UserProvider } from "./context/UserContext";
+import { maybeRunDailyHoldingUpdate } from "./utils/maybeRunDailyHoldingUpdate";
 import {
   doc,
   getDoc,
@@ -19,6 +20,7 @@ import {
   orderBy,
   where,
   getDocs,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -34,11 +36,6 @@ function App() {
 
       if (currentUser) {
         const today = getDateStr();
-        const snap = await getOrGenerateSnapshot(today);
-        setTodaySnapshot(snap);
-      }
-      if (currentUser) {
-        const today = getDateStr(); // e.g. "2025-07-31"
         const snap = await getOrGenerateSnapshot(today);
         setTodaySnapshot(snap);
 
@@ -63,7 +60,11 @@ function App() {
             createdAt: Timestamp.now(),
           });
         }
+
+        // ✅ Run daily holding duration update
+        await maybeRunDailyHoldingUpdate(currentUser.uid, today);
       }
+
       async function getMostRecentRealizedPL(userId, todayStr) {
         const colRef = collection(db, "users", userId, "realizedPLByDate");
         const q = query(
@@ -77,9 +78,47 @@ function App() {
         }
         return 0;
       }
+
+      
     });
+
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+  function scheduleMidnightUpdate(uid) {
+    const now = new Date();
+    const nextMidnight = new Date();
+    nextMidnight.setHours(24, 0, 5, 0); // 12:00:05 AM buffer
+    const msUntilMidnight = nextMidnight - now;
+
+    const timer = setTimeout(async () => {
+      const today = getDateStr();
+
+      // 🔁 Re-run holding update
+      await maybeRunDailyHoldingUpdate(uid, today);
+
+      // 🔁 Re-fetch snapshot
+      const updatedSnap = await getOrGenerateSnapshot(today);
+      setTodaySnapshot(updatedSnap);
+
+      // ✅ Optional toast
+      toast.success("✅ Portfolio updated for the new day", {
+        position: "bottom-right",
+      });
+
+      // 🕛 Schedule the next update
+      scheduleMidnightUpdate(uid);
+    }, msUntilMidnight);
+
+    return () => clearTimeout(timer);
+  }
+
+  if (user) {
+    scheduleMidnightUpdate(user.uid);
+  }
+}, [user]);
+
 
   if (!authChecked) {
     return (
@@ -93,7 +132,6 @@ function App() {
     <UserProvider value={{ user, todaySnapshot }}>
       <BrowserRouter className="overflow-hidden">
         <ToastContainer position="top-center" autoClose={2000} />
-
         <div className="min-h-screen bg-gradient-to-r from-[#b2dfdb] via-[#a5d6a7] to-[#dcedc8] bg-[length:200%_200%] animate-gradient-x px-[60px] py-[30px] text-[var(--color-text)]">
           <div className="flex flex-col gap-4">
             <NavBar user={user} />

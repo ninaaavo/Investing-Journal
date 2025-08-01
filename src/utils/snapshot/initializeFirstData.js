@@ -1,7 +1,7 @@
 import { doc, setDoc, Timestamp, updateDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 
-export async function initializeFirstSnapshot(userId) {
+export async function initializeFirstData(userId) {
   const today = new Date();
 
   // ⏪ Set to "yesterday" to match first day snapshot logic
@@ -21,7 +21,7 @@ export async function initializeFirstSnapshot(userId) {
     cash: 0,
     totalAssets: 0,
     netContribution: 0,
-    positions: {}, // ✅ using object format instead of array
+    positions: {},
     createdAt: Timestamp.fromDate(yesterday),
   });
 
@@ -37,5 +37,13 @@ export async function initializeFirstSnapshot(userId) {
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
     firstSnapshotDate: yyyyMMdd,
+  });
+
+  // 🔹 4. Initialize capital-weighted holding stats
+  const statsRef = doc(db, "users", userId, "stats", "holdingDuration");
+  await setDoc(statsRef, {
+    totalHoldingDays: 0,
+    totalCapital: 0,
+    lastUpdatedDate: yyyyMMdd, // Start at yesterday
   });
 }

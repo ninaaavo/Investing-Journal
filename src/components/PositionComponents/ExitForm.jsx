@@ -228,6 +228,33 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         alert("FIFO stack exhausted. Not enough shares to cover exit.");
         return;
       }
+      // 🔽 If the exit is backdated, subtract holding days for sold shares
+      const exitDateObj = timestamp.toDate();
+      const today = new Date();
+
+      if (exitDateObj < today) {
+        const statsRef = doc(db, "users", user.uid, "stats", "holdingDuration");
+        const statsSnap = await getDoc(statsRef);
+
+        if (statsSnap.exists()) {
+          const stats = statsSnap.data();
+          let totalDaysToSubtract = 0;
+
+          entryEvents.forEach((entry) => {
+            const entryDate =
+              entry.entryTimestamp.toDate?.() ?? new Date(entry.entryTimestamp);
+            const daysHeld = (exitDateObj - entryDate) / (1000 * 60 * 60 * 24);
+            const capital = entry.sharesUsed * entry.entryPrice;
+            totalDaysToSubtract += daysHeld * capital;
+          });
+
+          await updateDoc(statsRef, {
+            totalHoldingDays: stats.totalHoldingDays - totalDaysToSubtract,
+            // ❌ Don't touch totalCapital — that only updates on entry
+            // ✅ Don't touch lastUpdatedDate — handled by daily scheduler
+          });
+        }
+      }
 
       // === Create Exit Journal ===
       const entriesRef = collection(db, "users", user.uid, "journalEntries");
@@ -341,8 +368,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       await updateDoc(userRef, { cash: newCash });
 
       // === Backfill snapshots if the exit is backdated ===
-      const exitDateObj = timestamp.toDate();
-      const today = new Date();
       if (exitDateObj < today) {
         await backfillSnapshotsFrom({
           userId: user.uid,
