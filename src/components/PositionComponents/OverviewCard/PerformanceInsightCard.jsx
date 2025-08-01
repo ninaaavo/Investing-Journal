@@ -92,11 +92,11 @@ const PerformanceInsightsCard = () => {
       value: winRate,
       info: "The percentage of closed positions where you made a profit."
     },
-    {
-      label: "Sharpe Ratio",
-      value: sharpeRatio,
-      info: "Measures risk-adjusted return. Higher is better (above 1 is good)."
-    },
+    // {
+    //   label: "Sharpe Ratio",
+    //   value: sharpeRatio,
+    //   info: "Measures risk-adjusted return. Higher is better (above 1 is good)."
+    // },
   ], [usePLPercentage, currentPerformance, allTimePerformance, winRate, sharpeRatio]);
 
   const toggleComponent = (
