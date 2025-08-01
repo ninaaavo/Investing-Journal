@@ -4,10 +4,11 @@ import Toggle from "./Toggle";
 import { getBestWorstPerformers } from "../../../utils/getBestWorstPerformers";
 import { doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../../../firebase";
-import { useUser } from "../../../context/UserContext"; // ✅ make sure this is correct
+import { useUser } from "../../../context/UserContext";
+import { calculateWinRate } from "../../../utils/calculateWinRate"; // ✅ NEW import
 
 const PerformanceInsightsCard = () => {
-  const { refreshTrigger } = useUser(); // ✅ use the trigger
+  const { refreshTrigger } = useUser();
   const [usePLPercentage, setUsePLPercentage] = useState(true);
   const [currentPerformance, setCurrentPerformance] = useState({ best: "Loading...", worst: "Loading..." });
   const [allTimePerformance, setAllTimePerformance] = useState({ best: "Loading...", worst: "Loading..." });
@@ -19,6 +20,11 @@ const PerformanceInsightsCard = () => {
       const current = await getBestWorstPerformers(usePLPercentage);
       setCurrentPerformance(current);
 
+      console.log("im waiting to calculate winrate")
+      // ✅ Get Win Rate
+      const rate = await calculateWinRate();
+      setWinRate(rate);
+
       const user = auth.currentUser;
       if (!user) return;
       const userRef = doc(db, "users", user.uid);
@@ -27,8 +33,9 @@ const PerformanceInsightsCard = () => {
       if (userSnap.exists()) {
         const userData = userSnap.data();
 
-        if (userData.winRate) setWinRate(`${(userData.winRate * 100).toFixed(1)}%`);
-        if (userData.sharpeRatio !== undefined) setSharpeRatio(userData.sharpeRatio.toFixed(2));
+        if (userData.sharpeRatio !== undefined) {
+          setSharpeRatio(userData.sharpeRatio.toFixed(2));
+        }
 
         const best = userData.bestClosedPosition;
         const worst = userData.worstClosedPosition;
@@ -48,7 +55,7 @@ const PerformanceInsightsCard = () => {
     };
 
     fetchPerformance();
-  }, [usePLPercentage, refreshTrigger]); // ✅ added refreshTrigger
+  }, [usePLPercentage, refreshTrigger]);
 
   const getColorClass = (value) => {
     if (typeof value !== "string") return "";

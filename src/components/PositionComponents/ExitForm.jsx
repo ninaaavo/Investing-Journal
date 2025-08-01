@@ -407,7 +407,15 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       const realizedPL = pAndL; // Already calculated above
       const userData = userSnap.data();
       const costBasis = totalCostBasis;
-
+      if (realizedPL > 0) {
+        await updateDoc(userRef, {
+          winCount: increment(1),
+        });
+      } else if (realizedPL < 0) {
+        await updateDoc(userRef, {
+          lossCount: increment(1),
+        });
+      }
       const newClosed = {
         ticker: stock.ticker,
         realizedPL,

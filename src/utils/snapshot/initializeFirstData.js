@@ -37,6 +37,8 @@ export async function initializeFirstData(userId) {
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
     firstSnapshotDate: yyyyMMdd,
+    winCount:0,
+    lossCount:0
   });
 
   // 🔹 4. Initialize capital-weighted holding stats
