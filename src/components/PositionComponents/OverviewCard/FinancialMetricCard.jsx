@@ -47,55 +47,54 @@ const FinancialMetricCard = () => {
   };
 
   const financialFields = useMemo(
-    () => [
-      {
-        label: "P/L Change",
-        type: "dropdown",
-        options: ["1D", "1W", "1M", "3M", "1Y", "All"],
-        selected: timeRange,
-        onChange: setTimeRangeCheck,
-        baseValue: plValues[timeRange],
-        info: "Profit or loss based on selected time range. Helps assess short-term portfolio changes.",
+  () => [
+    {
+      label: "Unrealized P/L",
+      type: "dropdown",
+      options: ["1D", "1W", "1M", "3M", "1Y", "All"],
+      selected: timeRange,
+      onChange: setTimeRangeCheck,
+      baseValue: plValues[timeRange],
+      info: "Profit or loss based on selected time range. Helps assess short-term portfolio changes.",
+    },
+    {
+      label: "Cash on Hand",
+      editable: true,
+      defaultValue: cash,
+      onValueChange: (value) => {
+        console.log("User updated cash to:", value);
       },
-      {
-        label: "Cash on Hand",
-        editable: true,
-        defaultValue: cash,
-        onValueChange: (value) => {
-          // TODO: implement Firestore cash update + snapshot recalculation
-          console.log("User updated cash to:", value);
-        },
-      },
-      {
-        label: "Money Investing",
-        value: `$${invested.toLocaleString()}`,
-      },
-      {
-        label: "Total Assets",
-        value: `$${totalAssets.toLocaleString()}`,
-      },
-      {
-        label: "Dividend",
-        type: "dropdown",
-        options: ["YTD", "All Time"],
-        selected: dividendRange,
-        onChange: (value) => setDividendRange(value),
-        baseValue: dividendValues[dividendRange],
-        info: "Track how much income your investments generate over time.",
-      },
-      {
-        label: "Avg Holding Duration",
-        value: "104 days",
-        info: "Helps assess how long you typically hold investments before selling.",
-      },
-      {
-        label: "Expense Ratio",
-        value: "0.11%",
-        info: "Average annual cost of owning ETFs in your portfolio. Lower is usually better.",
-      },
-    ],
-    [timeRange, dividendRange, cash, invested, totalAssets]
-  );
+    },
+    {
+      label: "Money Investing",
+      value: `$${invested.toLocaleString()}`,
+    },
+    {
+      label: "Total Assets",
+      value: `$${totalAssets.toLocaleString()}`,
+    },
+    {
+      label: "Dividend",
+      type: "dropdown",
+      options: ["YTD", "All Time"],
+      selected: dividendRange,
+      onChange: (value) => setDividendRange(value),
+      baseValue: dividendValues[dividendRange],
+      info: "Track how much income your investments generate over time.",
+    },
+    {
+      label: "Avg Holding Duration",
+      value: "104 days",
+      info: "Helps assess how long you typically hold investments before selling.",
+    },
+    {
+      label: "Expense Ratio",
+      value: "0.11%",
+      info: "Average annual cost of owning ETFs in your portfolio. Lower is usually better.",
+    },
+  ],
+  [timeRange, dividendRange, cash, invested, totalAssets, plValues] // ✅ Add plValues here
+);
 
   if (isLoading) {
     return <div>Loading financial snapshot...</div>;
