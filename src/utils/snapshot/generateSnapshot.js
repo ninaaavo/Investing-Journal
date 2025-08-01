@@ -30,7 +30,7 @@ export default async function generateSnapshot({
   const priceMap =
     date === null
       ? await getStockPrices(tickers)
-      : await getHistoricPrices(tickers, date);
+      : await fetchHistoricalPrices(tickers, date);
 
   console.log("Your price map is", priceMap);
 
