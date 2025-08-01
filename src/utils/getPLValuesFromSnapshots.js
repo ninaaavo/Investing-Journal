@@ -24,7 +24,6 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
     ? userDoc.data().firstSnapshotDate
     : null;
   if (!firstDateStr) return {};
-  console.log("your first day str is", firstDateStr)
 
   const firstDate = toEasternDateOnly(firstDateStr);
   const firstSnapDoc = await getDoc(
@@ -46,13 +45,9 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
     })
       .format(pastDate)
       .replaceAll("/", "-"); // Format: "YYYY-MM-DD"
-    console.log("your past day of", daysAgo, "is", yyyyMMdd);
-    // console.log("your frist date is", firstDate)
     let past = null;
     try {
-      console.log("your past date is", pastDate, "Your first date is", firstDate)
       if (isBeforeDateOnly(pastDate, firstDate)) {
-        console.log("it is true that pastdate < firstdate")
         past = firstSnapshot;
       } else {
         const snapDoc = await getDoc(
@@ -68,7 +63,6 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
     }
     
     if (past?.unrealizedPL !== undefined) {
-      console.log("the past unrealizedpl is", past.unrealizedPL)
       const delta = todayUnrealizedPL - past.unrealizedPL;
       const percent = (delta / (Math.abs(past.unrealizedPL) || 1)) * 100;
       const sign = delta >= 0 ? "+" : "-";
