@@ -5,6 +5,24 @@ import { useUser } from "../../../context/UserContext";
 import { calculateLiveSnapshot } from "../../../utils/snapshot/calculateLiveSnapshot";
 import { getPLValuesFromSnapshots } from "../../../utils/getPLValuesFromSnapshots.js";
 const FinancialMetricCard = () => {
+  const { refreshTrigger } = useUser();
+
+useEffect(() => {
+  async function fetchSnapshot() {
+    setIsLoading(true); // Optional: show loading again
+    try {
+      const snapshot = await calculateLiveSnapshot();
+      setTodaySnapshot(snapshot);
+    } catch (error) {
+      console.error("Error fetching live snapshot:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  fetchSnapshot();
+}, [refreshTrigger]); // ✅ Re-run when trigger updates
+
   const [timeRange, setTimeRange] = useState("1D");
   const [dividendRange, setDividendRange] = useState("YTD");
   const [todaySnapshot, setTodaySnapshot] = useState(null);

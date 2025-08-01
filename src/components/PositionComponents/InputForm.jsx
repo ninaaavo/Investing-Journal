@@ -21,6 +21,8 @@ import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFro
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
+import { useUser } from "../../context/UserContext";
+
 export default function InputForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editCheckListMode, setEditCheckListMode] = useState(false);
@@ -92,7 +94,6 @@ export default function InputForm() {
     }
   };
 
-
   const [form, setForm] = useState({
     ticker: "",
     companyName: "",
@@ -157,6 +158,7 @@ export default function InputForm() {
   };
 
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
+  const { incrementRefresh } = useUser();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -377,6 +379,7 @@ export default function InputForm() {
         backfillSnapshotsFrom(tradeDetails).catch((err) =>
           console.error("❌ Backfill failed in background:", err)
         );
+        incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
       }
 
       setShowExpandedForm(false);
