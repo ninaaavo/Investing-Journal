@@ -22,6 +22,7 @@ import {
 import { getDateStr } from "../../utils/getDateStr"; // format: YYYY-MM-DD
 import DateTimeInput from "./DateTimeInput";
 import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
+import { useUser } from "../../context/UserContext";
 
 function buildTimestamp(dateStr, timeStr) {
   if (!dateStr) return { timestamp: null, timeIncluded: false };
@@ -48,6 +49,7 @@ const EXIT_REASONS = [
 
 export default function ExitForm({ onSubmit, onClose, stock }) {
   const [error, setError] = useState("");
+  const { incrementRefresh } = useUser();
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
@@ -401,6 +403,42 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           createdAt: serverTimestamp(),
         });
       }
+      // === Update best/worst closed performers ===
+      const realizedPL = pAndL; // Already calculated above
+      const userData = userSnap.data();
+      const costBasis = totalCostBasis;
+
+      const newClosed = {
+        ticker: stock.ticker,
+        realizedPL,
+        costBasis,
+        date: timestamp,
+      };
+
+      // Helper function to calculate % return
+      const getPLRatio = (item) =>
+        item && item.costBasis !== 0
+          ? item.realizedPL / item.costBasis
+          : -Infinity;
+
+      const best = userData.bestClosedPosition;
+      const worst = userData.worstClosedPosition;
+
+      const shouldUpdateBest =
+        !best || getPLRatio(newClosed) > getPLRatio(best);
+
+      const shouldUpdateWorst =
+        !worst || getPLRatio(newClosed) < getPLRatio(worst);
+
+      const updates = {};
+      if (shouldUpdateBest) updates.bestClosedPosition = newClosed;
+      if (shouldUpdateWorst) updates.worstClosedPosition = newClosed;
+
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(userRef, updates);
+      }
+      incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
+
       setIsSubmitting(false); // ✅ done
     } catch (err) {
       setIsSubmitting(false);
@@ -472,11 +510,6 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       fetchChecklist();
     }
   }, [stock, form.shares]);
-
-  const inputClass = (field) =>
-    `w-full p-2 border rounded transition-all duration-300 ${
-      invalidFields[field] ? "border-red-500 bg-red-50" : "border-gray-300"
-    }`;
 
   return (
     <motion.form
