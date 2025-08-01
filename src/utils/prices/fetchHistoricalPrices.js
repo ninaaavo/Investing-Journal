@@ -1,6 +1,6 @@
 const BASE_URL = "https://yahoo-proxy-api.nina-vo.workers.dev";
 
-export async function fetchHistoricalPrices(tickers, initialDate) {
+export default async  function fetchHistoricalPrices(tickers, initialDate) {
   const maxLookback = 10;
   const fetchedPrices = {};
 

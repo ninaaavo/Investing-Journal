@@ -16,6 +16,7 @@ import {
   updateDoc,
   Timestamp,
 } from "firebase/firestore";
+import { buildTimestamp } from "../../utils/buildTimestamp";
 import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
 import TickerSearchInput from "../TickerSearchInput";
 import { toast } from "react-toastify";
@@ -91,17 +92,6 @@ export default function InputForm() {
     }
   };
 
-  function buildTimestamp(dateStr, timeStr) {
-    if (!dateStr) return { timestamp: null, timeIncluded: false };
-
-    const fullDateTime = `${dateStr}T${timeStr || "00:00"}`;
-    const timestamp = Timestamp.fromDate(new Date(fullDateTime));
-
-    return {
-      timestamp,
-      timeProvided: !!timeStr,
-    };
-  }
 
   const [form, setForm] = useState({
     ticker: "",

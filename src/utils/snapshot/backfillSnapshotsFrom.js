@@ -1,3 +1,19 @@
+import {
+  doc,
+  getDoc,
+  setDoc,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "../../firebase";
+import  fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
+
+/**
+ * @param {string} userId - Firestore UID
+ * @param {Date} fromDate - Start date for backfill
+ * @param {Object} newTrade - { ticker, shares, averagePrice, direction, entryTimestamp }
+ * @param {number} tradeCost - Proceeds (positive for sell, negative for buy)
+ * @param {boolean} isExit - If this is an exit trade
+ */
 export async function backfillSnapshotsFrom({
   userId,
   fromDate,

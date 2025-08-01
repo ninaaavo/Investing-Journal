@@ -1,6 +1,6 @@
 import { auth, db } from "../../firebase";
 import getStockPrices from "../prices/getStockPrices";
-import getHistoricPrices from "../prices/getHistoricPrices";
+import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { Timestamp, collection, getDocs, doc } from "firebase/firestore";
 
 const safeParse = (val) => parseFloat(val || 0);
