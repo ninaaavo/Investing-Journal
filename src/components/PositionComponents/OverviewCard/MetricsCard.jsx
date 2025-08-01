@@ -155,13 +155,14 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                   <div className="flex items-center gap-2">
                     {field.type !== "dropdown" && !field.editable && (
                       <span
-                        className={`font-medium text-sm text-right ${getValueColorClass(
-                          field.value
-                        )}`}
+                        className={`font-medium text-sm text-right ${
+                          field.valueClass || getValueColorClass(field.value)
+                        }`}
                       >
                         {field.value}
                       </span>
                     )}
+
                     {field.baseValue && (
                       <span
                         className={`font-medium text-sm text-right ${getValueColorClass(

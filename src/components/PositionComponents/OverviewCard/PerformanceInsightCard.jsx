@@ -10,8 +10,14 @@ import { calculateWinRate } from "../../../utils/calculateWinRate"; // ✅ NEW i
 const PerformanceInsightsCard = () => {
   const { refreshTrigger } = useUser();
   const [usePLPercentage, setUsePLPercentage] = useState(true);
-  const [currentPerformance, setCurrentPerformance] = useState({ best: "Loading...", worst: "Loading..." });
-  const [allTimePerformance, setAllTimePerformance] = useState({ best: "Loading...", worst: "Loading..." });
+  const [currentPerformance, setCurrentPerformance] = useState({
+    best: "Loading...",
+    worst: "Loading...",
+  });
+  const [allTimePerformance, setAllTimePerformance] = useState({
+    best: "Loading...",
+    worst: "Loading...",
+  });
   const [winRate, setWinRate] = useState("Loading...");
   const [sharpeRatio, setSharpeRatio] = useState("Loading...");
 
@@ -20,7 +26,7 @@ const PerformanceInsightsCard = () => {
       const current = await getBestWorstPerformers(usePLPercentage);
       setCurrentPerformance(current);
 
-      console.log("im waiting to calculate winrate")
+      console.log("im waiting to calculate winrate");
       // ✅ Get Win Rate
       const rate = await calculateWinRate();
       setWinRate(rate);
@@ -41,10 +47,16 @@ const PerformanceInsightsCard = () => {
         const worst = userData.worstClosedPosition;
 
         const format = (pos) => {
-          if (!pos || !isFinite(pos.realizedPL) || !isFinite(pos.costBasis)) return "N/A";
+          if (!pos || !isFinite(pos.realizedPL) || !isFinite(pos.costBasis))
+            return "N/A";
           return usePLPercentage
-            ? `${pos.ticker} (${((pos.realizedPL / pos.costBasis) * 100).toFixed(1)}%)`
-            : `${pos.ticker} (${pos.realizedPL >= 0 ? "+" : "-"}$${Math.abs(pos.realizedPL).toLocaleString()})`;
+            ? `${pos.ticker} (${(
+                (pos.realizedPL / pos.costBasis) *
+                100
+              ).toFixed(1)}%)`
+            : `${pos.ticker} (${pos.realizedPL >= 0 ? "+" : "-"}$${Math.abs(
+                pos.realizedPL
+              ).toLocaleString()})`;
         };
 
         setAllTimePerformance({
@@ -56,48 +68,70 @@ const PerformanceInsightsCard = () => {
 
     fetchPerformance();
   }, [usePLPercentage, refreshTrigger]);
+  console.log("your currentperf", currentPerformance)
 
   const getColorClass = (value) => {
     if (typeof value !== "string") return "";
-    return value.includes("-") ? "text-red-500" : value.match(/\+[\d.]+%|\+\$[\d,]+/) ? "text-green-600" : "";
+    console.log("i got here w value", value)
+    const isNegative = value.includes("-");
+console.log('is negative is', isNegative)
+    if (isNegative) return "text-red-500";
+    else return "text-green-600";
   };
 
-  const insightsFields = useMemo(() => [
-    {
-      label: `Best Performer (Current)`,
-      value: currentPerformance.best,
-      valueClass: getColorClass(currentPerformance.best),
-      info: `Stock with the highest return in your current holdings (${usePLPercentage ? "% return" : "dollar gain"}).`
-    },
-    {
-      label: `Best Performer (All Time)`,
-      value: allTimePerformance.best,
-      valueClass: getColorClass(allTimePerformance.best),
-      info: `Highest performer you've ever held (${usePLPercentage ? "% return" : "dollar gain"}).`
-    },
-    {
-      label: `Worst Performer (Current)`,
-      value: currentPerformance.worst,
-      valueClass: getColorClass(currentPerformance.worst),
-      info: `Biggest current loss (${usePLPercentage ? "% loss" : "dollar loss"}).`
-    },
-    {
-      label: `Worst Performer (All Time)`,
-      value: allTimePerformance.worst,
-      valueClass: getColorClass(allTimePerformance.worst),
-      info: `Worst performer ever (${usePLPercentage ? "% loss" : "dollar loss"}).`
-    },
-    {
-      label: "Win Rate",
-      value: winRate,
-      info: "The percentage of closed positions where you made a profit."
-    },
-    // {
-    //   label: "Sharpe Ratio",
-    //   value: sharpeRatio,
-    //   info: "Measures risk-adjusted return. Higher is better (above 1 is good)."
-    // },
-  ], [usePLPercentage, currentPerformance, allTimePerformance, winRate, sharpeRatio]);
+  const insightsFields = useMemo(
+    () => [
+      {
+        label: `Best Performer (Current)`,
+        value: currentPerformance.best,
+        valueClass: getColorClass(currentPerformance.best),
+        info: `Stock with the highest return in your current holdings (${
+          usePLPercentage ? "% return" : "dollar gain"
+        }).`,
+      },
+      {
+        label: `Best Performer (All Time)`,
+        value: allTimePerformance.best,
+        valueClass: getColorClass(allTimePerformance.best),
+        info: `Highest performer you've ever held (${
+          usePLPercentage ? "% return" : "dollar gain"
+        }).`,
+      },
+      {
+        label: `Worst Performer (Current)`,
+        value: currentPerformance.worst,
+        valueClass: getColorClass(currentPerformance.worst),
+        info: `Biggest current loss (${
+          usePLPercentage ? "% loss" : "dollar loss"
+        }).`,
+      },
+      {
+        label: `Worst Performer (All Time)`,
+        value: allTimePerformance.worst,
+        valueClass: getColorClass(allTimePerformance.worst),
+        info: `Worst performer ever (${
+          usePLPercentage ? "% loss" : "dollar loss"
+        }).`,
+      },
+      {
+        label: "Win Rate",
+        value: winRate,
+        info: "The percentage of closed positions where you made a profit.",
+      },
+      // {
+      //   label: "Sharpe Ratio",
+      //   value: sharpeRatio,
+      //   info: "Measures risk-adjusted return. Higher is better (above 1 is good)."
+      // },
+    ],
+    [
+      usePLPercentage,
+      currentPerformance,
+      allTimePerformance,
+      winRate,
+      sharpeRatio,
+    ]
+  );
 
   const toggleComponent = (
     <div className="flex items-center gap-2">
