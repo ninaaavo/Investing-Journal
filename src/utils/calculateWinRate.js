@@ -2,7 +2,6 @@ import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase"; // adjust path as needed
 
 export async function calculateWinRate() {
-    console.log("im in cal wr")
   const user = auth.currentUser;
   if (!user) return "N/A";
 
