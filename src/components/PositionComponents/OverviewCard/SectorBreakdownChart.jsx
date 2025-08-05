@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -10,18 +10,22 @@ import {
   LabelList,
   Cell,
 } from "recharts";
+import { getSectorBreakdownData } from "../../../utils/getSectorBreakdownData"; // path adjusted to your structure
+import { useUser } from "../../../context/UserContext";
 
 const SectorBreakdownChart = () => {
+  const { user, refreshTrigger } = useUser();
+  const [data, setData] = useState([]);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      const breakdown = await getSectorBreakdownData(user.uid);
+      setData(breakdown);
+    };
 
-  const data = [
-    { name: "Technology", value: 40 },
-    { name: "Healthcare", value: 20 },
-    { name: "Financials", value: 15 },
-    { name: "Consumer Goods", value: 10 },
-    { name: "Energy", value: 8 },
-    { name: "Utilities", value: 7 },
-  ];
+    fetchData();
+  }, [user, refreshTrigger]);
 
   const maxValue = Math.max(...data.map((d) => d.value));
   const minValue = Math.min(...data.map((d) => d.value));
@@ -80,37 +84,71 @@ const SectorBreakdownChart = () => {
       </>
     );
   };
+const chartHeight = data.length * 60 + 40;
 
-  return (
-    <div
-      className="w-full h-[350px] bg-white rounded-xl shadow-md p-4"
-    >
-      <h2 className="text-lg font-semibold mb-2">
-        Sector Breakdown
-      </h2>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          data={data}
-          layout="vertical"
-          barSize={25}
-          margin={{ bottom: 20, right: 30 }}
-          barGap={100}
-          barCategoryGap={100}
-        >
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis type="number" />
-          <YAxis type="category" dataKey="name" tick={false} width={0} />
-          <Tooltip formatter={(value) => `${value}%`} />
-          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-            {data.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={getGreenShade(entry.value)} />
-            ))}
-            <LabelList dataKey="name" content={DynamicNameLabel} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
+return (
+  <div
+    className="w-full bg-white rounded-xl shadow-md p-4"
+    style={{ height: `${chartHeight}px` }}
+  >
+    <h2 className="text-lg font-semibold mb-2">Sector Breakdown</h2>
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+        data={data}
+        layout="vertical"
+        barSize={60} // thinner bars with vertical spacing
+        margin={{ top: 10, bottom: 20, right: 30, left: 10 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis type="number" domain={[0, 'dataMax + 10']} />
+        <YAxis type="category" dataKey="name" tick={false} width={0} />
+        <Tooltip formatter={(value) => `${value}%`} />
+        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={getGreenShade(entry.value)} />
+          ))}
+          <LabelList
+            dataKey="name"
+            content={({ x, y, width, height, index }) => {
+              const barValue = data[index].value;
+              const label = data[index].name;
+              const shouldShowOutside = index >= effectiveCutoff;
+              const labelX = x + 10;
+              const percentX = x + width + 10;
+              const fill = shouldShowOutside ? "#333" : "#fff";
+
+              return (
+                <>
+                  {!shouldShowOutside && (
+                    <text
+                      x={labelX}
+                      y={y + height / 2}
+                      fill={fill}
+                      fontSize={12}
+                      alignmentBaseline="middle"
+                    >
+                      {label}
+                    </text>
+                  )}
+                  <text
+                    x={percentX}
+                    y={y + height / 2}
+                    fill="#333"
+                    fontSize={12}
+                    alignmentBaseline="middle"
+                  >
+                    {shouldShowOutside ? `${label}: ${barValue}%` : `${barValue}%`}
+                  </text>
+                </>
+              );
+            }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+);
+
 };
 
 export default SectorBreakdownChart;
