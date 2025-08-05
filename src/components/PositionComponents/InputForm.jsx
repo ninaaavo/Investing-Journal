@@ -262,6 +262,60 @@ export default function InputForm() {
         collection(db, "users", user.uid, "journalEntries"),
         cleanedForm
       );
+      // 🔹 Update behavioral metrics
+      const behaviorRef = doc(
+        db,
+        "users",
+        user.uid,
+        "stats",
+        "behaviorMetrics"
+      );
+      const behaviorSnap = await getDoc(behaviorRef);
+
+      if (behaviorSnap.exists()) {
+        const behaviorData = behaviorSnap.data();
+
+        const newJournalCount = (behaviorData.journalEntryCount ?? 0) + 1;
+        const newConfidenceTotal =
+          (behaviorData.totalConfidenceScore ?? 0) +
+          (Number(form.confidence) || 0);
+
+        const newChecklistCounts = {
+          ...(behaviorData.checklistItemCounts || {}),
+        };
+
+        // Increment checklist item counts
+        Object.entries(form.checklist).forEach(([item, obj]) => {
+          if (obj.checked) {
+            newChecklistCounts[item] = (newChecklistCounts[item] ?? 0) + 1;
+          }
+        });
+
+        // Determine new most used checklist item
+        let topChecklistItem = behaviorData.mostUsedChecklistItem || "";
+        let maxCount = 0;
+        for (const [item, count] of Object.entries(newChecklistCounts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            topChecklistItem = item;
+          }
+        }
+
+        await updateDoc(behaviorRef, {
+          journalEntryCount: newJournalCount,
+          totalConfidenceScore: newConfidenceTotal,
+          checklistItemCounts: newChecklistCounts,
+          mostUsedChecklistItem: topChecklistItem,
+        });
+      } else {
+        // Fallback: behavior metrics doc not found
+        await setDoc(behaviorRef, {
+          journalEntryCount: 1,
+          totalConfidenceScore: Number(form.confidence) || 0,
+          checklistItemCounts: {},
+          mostUsedChecklistItem: "",
+        });
+      }
 
       // Add to current position
       const positionQuery = collection(

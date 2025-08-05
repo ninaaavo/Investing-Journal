@@ -37,6 +37,7 @@ export default function Journal() {
     try {
       const docRef = doc(db, "users", user.uid, "journalEntries", selected.id);
 
+      // 1. Optimistically update UI
       setSelected((prev) => ({
         ...prev,
         sellEvaluation: {
@@ -45,9 +46,49 @@ export default function Journal() {
         },
       }));
 
+      // 2. Update journal entry
       await updateDoc(docRef, {
         [`sellEvaluation.${field}`]: newValue,
       });
+
+      // 3. Update avgExitEvaluation if this is a rating
+      if (field === "rating") {
+        const newStars = newValue.length;
+        const prevStars = currentValue?.length || 0;
+
+        const behaviorRef = doc(
+          db,
+          "users",
+          user.uid,
+          "stats",
+          "behaviorMetrics"
+        );
+        const behaviorSnap = await getDoc(behaviorRef);
+
+        if (behaviorSnap.exists()) {
+          const data = behaviorSnap.data();
+          let exitEvalSum = data.exitEvalSum ?? 0;
+          let exitEvalCount = data.exitEvalCount ?? 0;
+
+          if (prevStars > 0) {
+            // Re-rating → only add the difference
+            exitEvalSum += newStars - prevStars;
+          } else {
+            // New rating → add full value and count
+            exitEvalSum += newStars;
+            exitEvalCount += 1;
+          }
+
+          const avgExitEvaluation =
+            exitEvalCount === 0 ? 0 : exitEvalSum / exitEvalCount;
+
+          await updateDoc(behaviorRef, {
+            exitEvalSum,
+            exitEvalCount,
+            avgExitEvaluation,
+          });
+        }
+      }
     } catch (err) {
       console.error(`Failed to update sellEvaluation.${field}:`, err);
       alert("Failed to update data.");

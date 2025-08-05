@@ -445,6 +445,91 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       if (Object.keys(updates).length > 0) {
         await updateDoc(userRef, updates);
       }
+      // 🔹 Update behavioral metrics for exit reasons
+      const behaviorRef = doc(
+        db,
+        "users",
+        user.uid,
+        "stats",
+        "behaviorMetrics"
+      );
+      const behaviorSnap = await getDoc(behaviorRef);
+
+      if (behaviorSnap.exists()) {
+        const behaviorData = behaviorSnap.data();
+        const reason = form.exitReason;
+        const reasonCounts = { ...(behaviorData.exitReasonCounts || {}) };
+
+        reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
+
+        // Determine most common exit reason
+        let topReason = behaviorData.mostCommonExitReason || "";
+        let maxCount = 0;
+
+        for (const [r, count] of Object.entries(reasonCounts)) {
+          if (count > maxCount) {
+            maxCount = count;
+            topReason = r;
+          }
+        }
+
+        await updateDoc(behaviorRef, {
+          exitReasonCounts: reasonCounts,
+          mostCommonExitReason: topReason,
+        });
+      } else {
+        // Fallback: create behavior metrics doc if missing
+        await setDoc(behaviorRef, {
+          journalEntryCount: 0,
+          totalConfidenceScore: 0,
+          exitReasonCounts: {
+            [form.exitReason]: 1,
+          },
+          mostCommonExitReason: form.exitReason,
+          checklistItemCounts: {},
+          mostUsedChecklistItem: "",
+        });
+      }
+      // 🔹 Update checklist reliability scores
+
+      if (behaviorSnap.exists()) {
+        const behaviorData = behaviorSnap.data();
+
+        const review = form.checklistReview || {};
+        const scoreMap = { positive: 1, neutral: 0, negative: -1 };
+        const updatedScores = {
+          ...(behaviorData.checklistReliabilityScores || {}),
+        };
+
+        for (const [item, result] of Object.entries(review)) {
+          const delta = scoreMap[result] ?? 0;
+          updatedScores[item] = (updatedScores[item] ?? 0) + delta;
+        }
+
+        // Determine most and least reliable
+        let mostReliable = "",
+          leastReliable = "";
+        let max = -Infinity,
+          min = Infinity;
+
+        for (const [item, score] of Object.entries(updatedScores)) {
+          if (score > max) {
+            max = score;
+            mostReliable = item;
+          }
+          if (score < min) {
+            min = score;
+            leastReliable = item;
+          }
+        }
+
+        await updateDoc(behaviorRef, {
+          checklistReliabilityScores: updatedScores,
+          mostReliableChecklistItem: mostReliable,
+          leastReliableChecklistItem: leastReliable,
+        });
+      }
+
       incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
 
       setIsSubmitting(false); // ✅ done

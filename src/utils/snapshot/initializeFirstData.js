@@ -37,8 +37,8 @@ export async function initializeFirstData(userId) {
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
     firstSnapshotDate: yyyyMMdd,
-    winCount:0,
-    lossCount:0
+    winCount: 0,
+    lossCount: 0,
   });
 
   // 🔹 4. Initialize capital-weighted holding stats
@@ -47,5 +47,22 @@ export async function initializeFirstData(userId) {
     totalHoldingDays: 0,
     totalCapital: 0,
     lastUpdatedDate: yyyyMMdd, // Start at yesterday
+  });
+
+  // 🔹 5. Initialize behavioral metrics
+  const behaviorRef = doc(db, "users", userId, "stats", "behaviorMetrics");
+  await setDoc(behaviorRef, {
+    journalEntryCount: 0,
+    totalConfidenceScore: 0,
+    mostCommonExitReason: "",
+    exitReasonCounts: {},
+    mostUsedChecklistItem: "",
+    checklistItemCounts: {},
+    checklistReliabilityScores: {}, // 🆕 Per-item reliability scores
+    mostReliableChecklistItem: "", // 🆕 Top scorer
+    leastReliableChecklistItem: "", // 🆕 Bottom scorer
+    exitEvalSum: 0, // 🆕 Total stars
+    exitEvalCount: 0, // 🆕 Number of ratings
+    avgExitEvaluation: 0, // 🆕 Computed
   });
 }
