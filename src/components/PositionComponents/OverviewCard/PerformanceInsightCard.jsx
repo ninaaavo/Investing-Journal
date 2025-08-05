@@ -26,7 +26,6 @@ const PerformanceInsightsCard = () => {
       const current = await getBestWorstPerformers(usePLPercentage);
       setCurrentPerformance(current);
 
-      console.log("im waiting to calculate winrate");
       // ✅ Get Win Rate
       const rate = await calculateWinRate();
       setWinRate(rate);
@@ -68,13 +67,10 @@ const PerformanceInsightsCard = () => {
 
     fetchPerformance();
   }, [usePLPercentage, refreshTrigger]);
-  console.log("your currentperf", currentPerformance)
 
   const getColorClass = (value) => {
     if (typeof value !== "string") return "";
-    console.log("i got here w value", value)
     const isNegative = value.includes("-");
-console.log('is negative is', isNegative)
     if (isNegative) return "text-red-500";
     else return "text-green-600";
   };
