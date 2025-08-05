@@ -6,6 +6,7 @@ import { calculateLiveSnapshot } from "../../../utils/snapshot/calculateLiveSnap
 import { getPLValuesFromSnapshots } from "../../../utils/getPLValuesFromSnapshots.js";
 import { db } from "../../../firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { fetchHoldingDuration } from "../../../utils/fetchHoldingDuration.js";
 
 const FinancialMetricCard = () => {
   const { refreshTrigger } = useUser();
@@ -18,23 +19,18 @@ const FinancialMetricCard = () => {
   const [avgHoldingDuration, setAvgHoldingDuration] = useState(null);
 
   useEffect(() => {
-    const fetchHoldingDuration = async () => {
-      const user = await import("firebase/auth").then(
-        (mod) => mod.auth.currentUser
-      );
-      if (!user) return;
+  const loadHoldingDuration = async () => {
+    const avg = await fetchHoldingDuration();
+    setAvgHoldingDuration(avg);
+  };
+  loadHoldingDuration();
+}, [refreshTrigger]);
 
-      const statsRef = doc(db, "users", user.uid, "stats", "holdingDuration");
-      const snap = await getDoc(statsRef);
-      if (snap.exists()) {
-        const { totalHoldingDays = 0, totalCapital = 0 } = snap.data();
-        const avg = totalCapital === 0 ? 0 : totalHoldingDays / totalCapital;
-        setAvgHoldingDuration(avg);
-      }
-    };
-
-    fetchHoldingDuration();
-  }, [refreshTrigger]);
+useEffect(() => {
+  if (todaySnapshot) {
+    fetchHoldingDuration().then(setAvgHoldingDuration); // Re-fetch after snapshot
+  }
+}, [todaySnapshot]);
 
   useEffect(() => {
     async function fetchSnapshot() {
