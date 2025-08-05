@@ -5,36 +5,31 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
-import  fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
+import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 
 /**
  * @param {string} userId - Firestore UID
  * @param {Date} fromDate - Start date for backfill
- * @param {Object} newTrade - { ticker, shares, averagePrice, direction, entryTimestamp }
- * @param {number} tradeCost - Proceeds (positive for sell, negative for buy)
+ * @param {Object} newTrade - { ticker, shares, averagePrice, direction, entryTimestamp, proceeds, cost }
+ * @param {number} pAndL - Realized profit or loss for this trade
  * @param {boolean} isExit - If this is an exit trade
  */
 export async function backfillSnapshotsFrom({
   userId,
   fromDate,
   newTrade,
-  tradeCost,
+  pAndL,
   isExit = false,
 }) {
   console.log("backfill is being called");
-  console.log(
-    "im backfill snap shot, i receive new trade info being",
-    newTrade,
-    "with trade cost",
-    tradeCost
-  );
+  console.log("received trade:", newTrade, "with P&L:", pAndL);
 
-  const yesterday = new Date(); // ← New
-  yesterday.setDate(yesterday.getDate() - 1); // ← New
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
   const cursor = new Date(fromDate);
   const tickers = [newTrade.ticker];
 
-  while (cursor <= yesterday) { // ← Modified condition
+  while (cursor <= yesterday) {
     const yyyyMMdd = cursor.toISOString().split("T")[0];
     const snapRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
 
@@ -51,6 +46,9 @@ export async function backfillSnapshotsFrom({
     const snapDoc = await getDoc(snapRef);
     let baseCash = 0;
     let basePositions = {};
+    let cumulativeTrades = 0;
+    let cumulativeInvested = 0;
+    let cumulativeRealizedPL = 0;
 
     const ticker = newTrade.ticker;
     const shares = newTrade.shares;
@@ -60,31 +58,37 @@ export async function backfillSnapshotsFrom({
       const data = snapDoc.data();
       baseCash = data.cash ?? 0;
       basePositions = structuredClone(data.positions ?? {});
+      cumulativeTrades = data.cumulativeTrades ?? 0;
+      cumulativeInvested = data.cumulativeInvested ?? 0;
+      cumulativeRealizedPL = data.cumulativeRealizedPL ?? 0;
     } else {
       const prevSnapDoc = await getDoc(prevSnapRef);
       if (prevSnapDoc.exists()) {
         const prevData = prevSnapDoc.data();
         baseCash = prevData.cash ?? 0;
         basePositions = structuredClone(prevData.positions ?? {});
+        cumulativeTrades = prevData.cumulativeTrades ?? 0;
+        cumulativeInvested = prevData.cumulativeInvested ?? 0;
+        cumulativeRealizedPL = prevData.cumulativeRealizedPL ?? 0;
       }
     }
 
     const positions = structuredClone(basePositions);
     let updatedCash = baseCash;
 
-    // Apply trade
     if (isExit) {
       if (positions[ticker]) {
         if (isShort) {
           positions[ticker].shares += shares;
           if (positions[ticker].shares >= 0) delete positions[ticker];
-          updatedCash -= tradeCost;
+          updatedCash -= newTrade.proceeds;
         } else {
           positions[ticker].shares -= shares;
           if (positions[ticker].shares <= 0) delete positions[ticker];
-          updatedCash += tradeCost;
+          updatedCash += newTrade.proceeds;
         }
       }
+      cumulativeRealizedPL += pAndL;
     } else {
       if (!positions[ticker]) {
         positions[ticker] = {
@@ -103,9 +107,11 @@ export async function backfillSnapshotsFrom({
           price: newTrade.averagePrice,
         });
       }
-
-      updatedCash += isShort ? tradeCost : -tradeCost;
+      updatedCash += isShort ? newTrade.proceeds : -newTrade.cost;
+      cumulativeInvested += newTrade.averagePrice * shares;
     }
+
+    cumulativeTrades += 1;
 
     const prices = await fetchHistoricalPrices(tickers, cursor);
     let totalMarketValue = 0;
@@ -149,6 +155,9 @@ export async function backfillSnapshotsFrom({
       totalPLPercent,
       positions,
       netContribution: 0,
+      cumulativeTrades,
+      cumulativeInvested,
+      cumulativeRealizedPL,
       createdAt: Timestamp.fromDate(new Date(yyyyMMdd)),
     });
 

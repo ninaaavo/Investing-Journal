@@ -22,6 +22,9 @@ export async function initializeFirstData(userId) {
     totalAssets: 0,
     netContribution: 0,
     positions: {},
+    cumulativeTrades: 0,
+    cumulativeInvested: 0,
+    cumulativeRealizedPL: 0,
     createdAt: Timestamp.fromDate(yesterday),
   });
 
