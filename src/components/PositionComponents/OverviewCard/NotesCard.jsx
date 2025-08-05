@@ -1,19 +1,52 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { db } from "../../../firebase"; // adjust path if needed
+import { useUser } from "../../../context/UserContext"; // assuming you have this
 
 const NotesCard = () => {
+  const { user } = useUser(); // get current user
   const [note, setNote] = useState("");
   const [height, setHeight] = useState(200); // Initial height in px
   const isResizing = useRef(false);
 
+  // Load saved note and height from Firestore
+  useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      const noteRef = doc(db, "users", user.uid, "notes", "general");
+      const noteSnap = await getDoc(noteRef);
+      if (noteSnap.exists()) {
+        const data = noteSnap.data();
+        setNote(data.note || "");
+        setHeight(data.height || 200);
+      }
+    };
+
+    loadData();
+  }, [user]);
+
+  // Save note to Firestore on blur
+  const handleNoteBlur = async () => {
+    if (!user) return;
+    const noteRef = doc(db, "users", user.uid, "notes", "general");
+    await setDoc(noteRef, { note, height }, { merge: true });
+  };
+
+  // Save height to Firestore on mouse up
+  const handleMouseUp = async () => {
+    isResizing.current = false;
+    document.body.style.cursor = "default";
+
+    if (!user) return;
+    const noteRef = doc(db, "users", user.uid, "notes", "general");
+    await setDoc(noteRef, { note, height }, { merge: true });
+  };
+
   const handleMouseDown = () => {
     isResizing.current = true;
     document.body.style.cursor = "row-resize";
-  };
-
-  const handleMouseUp = () => {
-    isResizing.current = false;
-    document.body.style.cursor = "default";
   };
 
   const handleMouseMove = (e) => {
@@ -22,15 +55,14 @@ const NotesCard = () => {
     }
   };
 
-  // Add and remove listeners
-  React.useEffect(() => {
+  useEffect(() => {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, []);
+  }, [note, height, user]); // ensure access to latest values
 
   return (
     <motion.div
@@ -51,9 +83,9 @@ const NotesCard = () => {
         className="w-full flex-grow border border-gray-300 rounded-md p-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
         value={note}
         onChange={(e) => setNote(e.target.value)}
+        onBlur={handleNoteBlur}
         style={{ height: "100%" }}
       />
-      {/* Resize Handle */}
       <div
         onMouseDown={handleMouseDown}
         className="w-full h-3 cursor-row-resize bg-gray-200 rounded-b-md"
