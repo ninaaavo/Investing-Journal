@@ -19,7 +19,9 @@ const FinancialMetricCard = () => {
 
   useEffect(() => {
     const fetchHoldingDuration = async () => {
-      const user = await import("firebase/auth").then((mod) => mod.auth.currentUser);
+      const user = await import("firebase/auth").then(
+        (mod) => mod.auth.currentUser
+      );
       if (!user) return;
 
       const statsRef = doc(db, "users", user.uid, "stats", "holdingDuration");
@@ -56,13 +58,13 @@ const FinancialMetricCard = () => {
     }
   }, [todaySnapshot]);
 
-  const cash = todaySnapshot?.cash ?? 0;
   const invested = todaySnapshot?.invested ?? 0;
   const totalAssets = todaySnapshot?.totalAssets ?? 0;
   const dividendValues = {
     YTD: "$432.75",
     "All Time": "$1,123.88",
   };
+  console.log("your today snapshot is", todaySnapshot);
 
   const setTimeRangeCheck = (v) => {
     setTimeRange(v);
@@ -82,7 +84,10 @@ const FinancialMetricCard = () => {
       {
         label: "Cash on Hand",
         editable: true,
-        defaultValue: isLoading ? "Loading..." : cash,
+        defaultValue:
+          isLoading || todaySnapshot?.cash === undefined || todaySnapshot?.cash === null
+            ? "Loading..."
+            : todaySnapshot.cash,
         onValueChange: (value) => {
           console.log("User updated cash to:", value);
         },
@@ -121,7 +126,7 @@ const FinancialMetricCard = () => {
     [
       timeRange,
       dividendRange,
-      cash,
+      todaySnapshot?.cash,
       invested,
       totalAssets,
       plValues,

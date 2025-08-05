@@ -3,7 +3,10 @@ import { Pencil } from "lucide-react";
 import AnimatedDropdown from "./AnimatedDropdown";
 import { motion } from "framer-motion";
 
-const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
+const MetricsCard = ({ title, fields, headerExtra }) => {
+  if(title == "Financial Metrics"){
+        console.log("im ", title, "the info i got is", fields)
+  }
   const [editableValues, setEditableValues] = useState(() => {
     const initial = {};
     fields.forEach((field) => {
@@ -13,6 +16,17 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
     });
     return initial;
   });
+
+  useEffect(() => {
+  const updated = {};
+  fields.forEach((field) => {
+    if (field.editable && typeof field.defaultValue === "number") {
+      updated[field.label] = field.defaultValue;
+    }
+  });
+  setEditableValues((prev) => ({ ...prev, ...updated }));
+}, [fields]);
+
 
   const [editingField, setEditingField] = useState(null);
   const [isEditingMetrics, setIsEditingMetrics] = useState(false);
@@ -181,7 +195,11 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                           <input
                             name="editInput"
                             type="number"
-                            defaultValue={editableValues[field.label]}
+                            defaultValue={
+                              typeof editableValues[field.label] === "number"
+                                ? editableValues[field.label]
+                                : ""
+                            }
                             className="w-20 px-1 py-0.5 border border-gray-300 rounded text-sm"
                           />
                           <button className="text-blue-600 text-sm">
@@ -191,11 +209,15 @@ const MetricsCard = ({ title, fields, titleDropdown, headerExtra }) => {
                       ) : (
                         <>
                           <span className={`font-medium text-sm`}>
-                            ${editableValues[field.label]?.toLocaleString()}
+                            {typeof editableValues[field.label] === "number"
+                              ? `$${editableValues[
+                                  field.label
+                                ].toLocaleString()}`
+                              : "Loading..."}
                           </span>
                           <Pencil
                             size={16}
-                            className=" cursor-pointer"
+                            className="cursor-pointer"
                             onClick={() => setEditingField(field.label)}
                           />
                         </>
