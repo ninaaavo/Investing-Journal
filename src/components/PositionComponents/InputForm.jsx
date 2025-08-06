@@ -271,6 +271,7 @@ export default function InputForm() {
         "behaviorMetrics"
       );
       const behaviorSnap = await getDoc(behaviorRef);
+      console.log("behavior snap exist is", behaviorSnap.exists())
 
       if (behaviorSnap.exists()) {
         const behaviorData = behaviorSnap.data();
@@ -285,22 +286,24 @@ export default function InputForm() {
         };
 
         // Increment checklist item counts
+        console.log("your check list is", form.checklist)
         Object.entries(form.checklist).forEach(([item, obj]) => {
-          if (obj.checked) {
-            newChecklistCounts[item] = (newChecklistCounts[item] ?? 0) + 1;
-          }
+          console.log("item is", item, "obj is", obj)
+          
+          newChecklistCounts[item] = (newChecklistCounts[item] ?? 0) + 1;
+          
         });
 
         // Determine new most used checklist item
         let topChecklistItem = behaviorData.mostUsedChecklistItem || "";
-        let maxCount = 0;
+        let maxCount = newChecklistCounts[topChecklistItem];
         for (const [item, count] of Object.entries(newChecklistCounts)) {
           if (count > maxCount) {
             maxCount = count;
             topChecklistItem = item;
           }
         }
-
+        console.log("your new checklist count to be updated is", newChecklistCounts)
         await updateDoc(behaviorRef, {
           journalEntryCount: newJournalCount,
           totalConfidenceScore: newConfidenceTotal,
