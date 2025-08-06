@@ -27,7 +27,6 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
     return `${mm}/${dd}/${yy}`;
   };
 
-  console.log("This is hover card my entries are", entries);
 
   return ReactDOM.createPortal(
     <AnimatePresence>
