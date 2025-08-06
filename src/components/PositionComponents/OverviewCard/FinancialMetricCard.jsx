@@ -60,7 +60,6 @@ useEffect(() => {
     YTD: "$432.75",
     "All Time": "$1,123.88",
   };
-  console.log("your today snapshot is", todaySnapshot);
 
   const setTimeRangeCheck = (v) => {
     setTimeRange(v);

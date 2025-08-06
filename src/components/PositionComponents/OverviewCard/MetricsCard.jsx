@@ -4,9 +4,7 @@ import AnimatedDropdown from "./AnimatedDropdown";
 import { motion } from "framer-motion";
 
 const MetricsCard = ({ title, fields, headerExtra }) => {
-  if(title == "Financial Metrics"){
-        console.log("im ", title, "the info i got is", fields)
-  }
+
   const [editableValues, setEditableValues] = useState(() => {
     const initial = {};
     fields.forEach((field) => {
