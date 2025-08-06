@@ -1,9 +1,9 @@
 import { doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import getOrGenerateSnapshot from "./snapshot/getOrGenerateSnapshot";
-// import calculateLiveUnrealizedPL from "./calculateLiveUnrealizedPL";
 import { calculateLiveSnapshot } from "./snapshot/calculateLiveSnapshot";
 import { toEasternDateOnly, isBeforeDateOnly } from "./dateUtils";
+import { lazyFixSnapshotPrice } from "./lazyFetchSnapshot";
 const timeFrames = {
   "1D": 1,
   "1W": 7,
@@ -26,13 +26,11 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
   if (!firstDateStr) return {};
 
   const firstDate = toEasternDateOnly(firstDateStr);
-  const firstSnapDoc = await getDoc(
-    doc(db, "users", user.uid, "dailySnapshots", firstDateStr)
-  );
-  const firstSnapshot = firstSnapDoc.exists() ? firstSnapDoc.data() : null;
 
-  const todaySnapshotLive = await calculateLiveSnapshot();
-  const todayUnrealizedPL = todaySnapshotLive.unrealizedPL ?? 0; 
+  const todayUnrealizedPL = todaySnapshot.unrealizedPL ?? 0;
+
+  // 🔍 Get today's tickers (open positions only)
+  const todayTickers = Object.keys(todaySnapshot.positions || {});
 
   for (const [label, daysAgo] of Object.entries(timeFrames)) {
     const pastDate = new Date(today);
@@ -44,11 +42,16 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
       day: "2-digit",
     })
       .format(pastDate)
-      .replaceAll("/", "-"); // Format: "YYYY-MM-DD"
+      .replaceAll("/", "-");
+
     let past = null;
+
     try {
       if (isBeforeDateOnly(pastDate, firstDate)) {
-        past = firstSnapshot;
+        const firstSnapDoc = await getDoc(
+          doc(db, "users", user.uid, "dailySnapshots", firstDateStr)
+        );
+        past = firstSnapDoc.exists() ? firstSnapDoc.data() : null;
       } else {
         const snapDoc = await getDoc(
           doc(db, "users", user.uid, "dailySnapshots", yyyyMMdd)
@@ -56,27 +59,83 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
         past = snapDoc.exists()
           ? snapDoc.data()
           : await getOrGenerateSnapshot(yyyyMMdd);
-        
+
+        // 🧠 Lazy fix missing prices
+        if (past?.positions) {
+          const tickersWithZeroPrice = Object.entries(past.positions)
+            .filter(([_, pos]) => pos?.priceAtSnapshot === 0)
+            .map(([ticker]) => ticker);
+
+          if (tickersWithZeroPrice.length > 0) {
+            for (const ticker of tickersWithZeroPrice) {
+              await lazyFixSnapshotPrice({
+                userId: user.uid,
+                ticker,
+                date: yyyyMMdd,
+              });
+            }
+
+            const fixedSnapDoc = await getDoc(
+              doc(db, "users", user.uid, "dailySnapshots", yyyyMMdd)
+            );
+            if (fixedSnapDoc.exists()) past = fixedSnapDoc.data();
+          }
+        }
       }
     } catch (err) {
       console.error(`Error getting snapshot for ${label} (${yyyyMMdd}):`, err);
     }
-    
-    if (past?.unrealizedPL !== undefined) {
-      const delta = todayUnrealizedPL - past.unrealizedPL;
-      const percent = (delta / (Math.abs(past.unrealizedPL) || 1)) * 100;
+
+    // 🧮 Filter by today's tickers only
+    let pastUnrealizedPL = 0;
+    if (past?.positions) {
+      for (const ticker of todayTickers) {
+        console.log("🔍 Checking", ticker);
+        const todayPos = todaySnapshot.positions[ticker];
+        const pastPos = past.positions[ticker];
+
+        if (!todayPos || !pastPos) continue;
+
+        const todayShares = todayPos.shares ?? 0;
+        const pastAveragePrice = pastPos.costBasis / pastPos.shares;
+        const pastMarketValue = pastPos.marketValue ?? 0;
+        const pastShares = pastPos.shares ?? 0;
+
+        // Cost: what it cost to buy today's shares at past avg price
+        const cost = todayShares * pastAveragePrice;
+
+        // Market value: value of today's shares at past per-share price
+        const pastPricePerShare =
+          pastShares > 0 ? pastMarketValue / pastShares : 0;
+        const marketValue = todayShares * pastPricePerShare;
+
+        const unrealized = marketValue - cost;
+        pastUnrealizedPL += unrealized;
+
+        console.log("Today's shares:", todayShares);
+        console.log("Past price/share:", pastPricePerShare);
+        console.log("Market value then:", marketValue);
+        console.log("Cost then:", cost);
+        console.log("Accumulated unrealized P/L:", pastUnrealizedPL);
+      }
+
+      const delta = todayUnrealizedPL - pastUnrealizedPL;
+      const percent = (delta / todaySnapshot.totalCostBasis) * 100;
       const sign = delta >= 0 ? "+" : "-";
+
       plValues[label] = `${sign}$${Math.abs(delta).toFixed(
-        0
+        2
       )} (${sign}${Math.abs(percent).toFixed(1)}%)`;
     } else {
       plValues[label] = "N/A";
     }
   }
 
+  // 🎯 All-time still uses full snapshot comparison
   plValues["All"] = await calculateAllTimePL(user.uid, todayUnrealizedPL);
   return plValues;
 }
+
 async function calculateAllTimePL(uid, todayUnrealizedPL) {
   const userDoc = await getDoc(doc(db, "users", uid));
   const firstDateStr = userDoc.exists()

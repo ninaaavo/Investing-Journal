@@ -2,7 +2,9 @@ import {
   doc,
   getDoc,
   setDoc,
+  updateDoc,
   Timestamp,
+  arrayUnion,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
@@ -28,6 +30,9 @@ export async function backfillSnapshotsFrom({
   yesterday.setDate(yesterday.getDate() - 1);
   const cursor = new Date(fromDate);
   const tickers = [newTrade.ticker];
+
+  // 🆕 Track tickers with missing prices
+  const refetchMap = {};
 
   while (cursor <= yesterday) {
     const yyyyMMdd = cursor.toISOString().split("T")[0];
@@ -139,6 +144,12 @@ export async function backfillSnapshotsFrom({
       totalMarketValue += marketValue;
       totalCostBasis += costBasis;
       unrealizedPL += pl;
+
+      // 🆕 Record for refetch if price is 0
+      if (price === 0) {
+        if (!refetchMap[ticker]) refetchMap[ticker] = [];
+        refetchMap[ticker].push(yyyyMMdd);
+      }
     }
 
     const totalAssets = totalMarketValue + updatedCash;
@@ -163,4 +174,22 @@ export async function backfillSnapshotsFrom({
 
     cursor.setDate(cursor.getDate() + 1);
   }
+
+  // 🧠 After loop, update user doc with refetchMap
+  const userRef = doc(db, "users", userId);
+  const userSnap = await getDoc(userRef);
+  const userData = userSnap.data() || {};
+  const existingQueue = userData.refetchQueue || {};
+
+  const newQueue = { ...existingQueue };
+
+  for (const [ticker, dates] of Object.entries(refetchMap)) {
+    const prevDates = newQueue[ticker] ?? [];
+    const mergedDates = Array.from(new Set([...prevDates, ...dates]));
+    newQueue[ticker] = mergedDates;
+  }
+
+  await updateDoc(userRef, {
+    refetchQueue: newQueue,
+  });
 }

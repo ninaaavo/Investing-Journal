@@ -10,14 +10,14 @@ import { fetchHoldingDuration } from "../../../utils/fetchHoldingDuration.js";
 
 const FinancialMetricCard = () => {
   const { refreshTrigger } = useUser();
-
+  
   const [timeRange, setTimeRange] = useState("1D");
   const [dividendRange, setDividendRange] = useState("YTD");
   const [todaySnapshot, setTodaySnapshot] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [plValues, setPlValues] = useState({});
   const [avgHoldingDuration, setAvgHoldingDuration] = useState(null);
-
+  console.log("your today snapshot is", todaySnapshot)
   useEffect(() => {
   const loadHoldingDuration = async () => {
     const avg = await fetchHoldingDuration();

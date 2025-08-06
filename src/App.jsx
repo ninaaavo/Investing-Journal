@@ -23,11 +23,18 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { retryRefetchQueue } from "./utils/retryRefetchQueue";
 
 function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [todaySnapshot, setTodaySnapshot] = useState(null);
+
+  useEffect(() => {
+  if (user?.uid) {
+    retryRefetchQueue(user.uid);
+  }
+}, [user]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
