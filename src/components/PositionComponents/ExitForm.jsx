@@ -464,7 +464,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
         // Determine most common exit reason
         let topReason = behaviorData.mostCommonExitReason || "";
-        let maxCount = 0;
+        let maxCount = reasonCounts[topReason] ?? 0;
 
         for (const [r, count] of Object.entries(reasonCounts)) {
           if (count > maxCount) {
