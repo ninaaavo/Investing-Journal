@@ -54,7 +54,7 @@ useEffect(() => {
     }
   }, [todaySnapshot]);
 
-  const invested = todaySnapshot?.invested ?? 0;
+  const costBasis = todaySnapshot?.totalCostBasis ?? 0;
   const totalAssets = todaySnapshot?.totalAssets ?? 0;
   const dividendValues = {
     YTD: "$432.75",
@@ -76,24 +76,24 @@ useEffect(() => {
         baseValue: isLoading ? "Loading..." : plValues[timeRange],
         info: "Profit or loss based on selected time range. Helps assess short-term portfolio changes.",
       },
+      // {
+      //   label: "Cash on Hand",
+      //   editable: true,
+      //   defaultValue:
+      //     isLoading || todaySnapshot?.cash === undefined || todaySnapshot?.cash === null
+      //       ? "Loading..."
+      //       : todaySnapshot.cash,
+      //   onValueChange: (value) => {
+      //     console.log("User updated cash to:", value);
+      //   },
+      // },
       {
-        label: "Cash on Hand",
-        editable: true,
-        defaultValue:
-          isLoading || todaySnapshot?.cash === undefined || todaySnapshot?.cash === null
-            ? "Loading..."
-            : todaySnapshot.cash,
-        onValueChange: (value) => {
-          console.log("User updated cash to:", value);
-        },
-      },
-      {
-        label: "Money Investing",
-        value: isLoading ? "Loading..." : `$${invested.toLocaleString()}`,
+        label: "Cost Basis",
+        value: isLoading ? "Loading..." : `$${costBasis.toFixed(2)}`,
       },
       {
         label: "Total Assets",
-        value: isLoading ? "Loading..." : `$${totalAssets.toLocaleString()}`,
+        value: isLoading ? "Loading..." : `$${totalAssets.toFixed(2)}`,
       },
       {
         label: "Dividend",
@@ -122,7 +122,7 @@ useEffect(() => {
       timeRange,
       dividendRange,
       todaySnapshot?.cash,
-      invested,
+      costBasis,
       totalAssets,
       plValues,
       avgHoldingDuration,

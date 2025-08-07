@@ -65,7 +65,7 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
           const tickersWithZeroPrice = Object.entries(past.positions)
             .filter(([_, pos]) => pos?.priceAtSnapshot === 0)
             .map(([ticker]) => ticker);
-
+          console.log("ticker w 0 prices are", tickersWithZeroPrice)
           if (tickersWithZeroPrice.length > 0) {
             for (const ticker of tickersWithZeroPrice) {
               await lazyFixSnapshotPrice({

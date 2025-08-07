@@ -1,7 +1,7 @@
 import { auth, db } from "../../firebase";
-import getStockPrices from "../prices/getStockPrices";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
-import { Timestamp, collection, getDocs, doc } from "firebase/firestore";
+import { Timestamp, collection, getDocs } from "firebase/firestore";
+import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 
 const safeParse = (val) => parseFloat(val || 0);
 
@@ -12,7 +12,9 @@ export default async function generateSnapshot({
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
-  const positionsRef = collection(db, "users", user.uid, "currentPositions");
+  const uid = user.uid;
+
+  const positionsRef = collection(db, "users", uid, "currentPositions");
   const positionsSnap = await getDocs(positionsRef);
 
   const rawPositions = [];
@@ -26,11 +28,19 @@ export default async function generateSnapshot({
     tickers.push(data.ticker);
   });
 
-  // === Price lookup ===
-  const priceMap =
-    date === null
-      ? await getStockPrices(tickers)
-      : await fetchHistoricalPrices(tickers, date);
+  const targetDate = date ? new Date(date) : new Date();
+  const dateStr = targetDate.toISOString().split("T")[0];
+
+  // ✅ Pass dateStr as string to avoid timezone drift
+  const result = await fetchHistoricalPrices(tickers, dateStr, dateStr);
+
+  const priceMap = {};
+  const dividendMap = {};
+
+  for (const ticker of tickers) {
+    priceMap[ticker] = result[ticker]?.priceMap?.[dateStr] ?? 0;
+    dividendMap[ticker] = result[ticker]?.dividendMap ?? {};
+  }
 
   console.log("Your price map is", priceMap);
 
@@ -70,15 +80,23 @@ export default async function generateSnapshot({
   }
 
   const totalAssets = totalMarketValue + cash;
-  const totalPLPercent =
-    totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+  const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+
+  // ✅ Inject dividendMap directly to avoid double-fetching
+  await checkAndAddDividendsToUser({
+    uid,
+    dateStr,
+    positions: enrichedPositions,
+    dividendMap,
+    writeToSnapshot: true,
+  });
 
   return {
     cash,
     invested: totalMarketValue,
     totalAssets,
     netContribution,
-    positions: enrichedPositions, // ✅ converted to object format
+    positions: enrichedPositions,
     unrealizedPL,
     totalCostBasis,
     totalMarketValue,

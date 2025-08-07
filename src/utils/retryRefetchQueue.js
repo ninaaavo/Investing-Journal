@@ -15,8 +15,10 @@ export async function retryRefetchQueue(userId) {
 
     for (const date of dates) {
       const targetDate = new Date(date);
-      const prices = await fetchHistoricalPrices([ticker], targetDate);
-      const price = prices?.[ticker] ?? 0;
+      const dateStr = targetDate.toISOString().split("T")[0];
+
+      const result = await fetchHistoricalPrices([ticker], targetDate, targetDate);
+      const price = result?.[ticker]?.priceMap?.[dateStr] ?? 0;
 
       if (price > 0) {
         // ✅ Patch the snapshot for that date
@@ -38,7 +40,7 @@ export async function retryRefetchQueue(userId) {
             let totalCostBasis = 0;
             let totalPL = 0;
 
-            for (const [tk, p] of Object.entries(snapData.positions)) {
+            for (const p of Object.values(snapData.positions)) {
               totalMarketValue += p.marketValue ?? 0;
               totalCostBasis += p.costBasis ?? 0;
               totalPL += p.unrealizedPL ?? 0;

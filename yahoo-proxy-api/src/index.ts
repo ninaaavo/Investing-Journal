@@ -12,15 +12,22 @@ export default {
       });
     }
 
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&period1=${from}&period2=${to}`;
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&period1=${from}&period2=${to}&events=div`;
 
     try {
       const yahooRes = await fetch(targetUrl, {
         headers: {
-          // This tricks Yahoo into thinking it's a real browser
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        },
       });
+
+      if (!yahooRes.ok) {
+        const errorText = await yahooRes.text();
+        return new Response(JSON.stringify({ error: "Yahoo API error", detail: errorText }), {
+          status: yahooRes.status,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       const data = await yahooRes.json();
 
@@ -32,7 +39,7 @@ export default {
         },
       });
     } catch (err) {
-      return new Response(JSON.stringify({ error: "Failed to fetch" }), {
+      return new Response(JSON.stringify({ error: "Fetch failed", detail: String(err) }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });

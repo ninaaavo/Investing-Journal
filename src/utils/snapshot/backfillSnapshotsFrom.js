@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
+import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 
 /**
  * @param {string} userId - Firestore UID
@@ -31,7 +32,6 @@ export async function backfillSnapshotsFrom({
   const cursor = new Date(fromDate);
   const tickers = [newTrade.ticker];
 
-  // 🆕 Track tickers with missing prices
   const refetchMap = {};
 
   while (cursor <= yesterday) {
@@ -118,13 +118,13 @@ export async function backfillSnapshotsFrom({
 
     cumulativeTrades += 1;
 
-    const prices = await fetchHistoricalPrices(tickers, cursor);
+    const priceResult = await fetchHistoricalPrices(tickers, yyyyMMdd, yyyyMMdd);
     let totalMarketValue = 0;
     let totalCostBasis = 0;
     let unrealizedPL = 0;
 
     for (const ticker in positions) {
-      const price = prices[ticker] ?? 0;
+      const price = priceResult?.[ticker]?.priceMap?.[yyyyMMdd] ?? 0;
       const pos = positions[ticker];
       const shares = pos.shares;
       const fifoStack = pos.fifoStack || [];
@@ -145,7 +145,6 @@ export async function backfillSnapshotsFrom({
       totalCostBasis += costBasis;
       unrealizedPL += pl;
 
-      // 🆕 Record for refetch if price is 0
       if (price === 0) {
         if (!refetchMap[ticker]) refetchMap[ticker] = [];
         refetchMap[ticker].push(yyyyMMdd);
@@ -172,10 +171,17 @@ export async function backfillSnapshotsFrom({
       createdAt: Timestamp.fromDate(new Date(yyyyMMdd)),
     });
 
+    await checkAndAddDividendsToUser({
+      uid: userId,
+      dateStr: yyyyMMdd,
+      positions,
+      writeToSnapshot: true,
+    });
+
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  // 🧠 After loop, update user doc with refetchMap
+  // Update user doc with refetchMap
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   const userData = userSnap.data() || {};

@@ -7,6 +7,8 @@ import fetchHistoricalPrices from "./prices/fetchHistoricalPrices";
  * Returns the updated price, or null if still unavailable.
  */
 export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
+  console.log("🔧 fixing", ticker, "at snapshot date", date);
+
   const snapRef = doc(db, "users", userId, "dailySnapshots", date);
   const snapSnap = await getDoc(snapRef);
   if (!snapSnap.exists()) return null;
@@ -15,19 +17,31 @@ export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
   const pos = data.positions?.[ticker];
   if (!pos || pos.priceAtSnapshot > 0) return pos?.priceAtSnapshot ?? null;
 
+  // ✅ Treat date string as UTC to avoid time zone drift
+  console.log("input date", date);
+  const dateStr = date; // trust the original date string
+  const result = await fetchHistoricalPrices([ticker], dateStr, dateStr);
+  const price = result?.[ticker]?.priceMap?.[dateStr] ?? 0;
+
   // 🧠 price is 0 — refetch it
-  const prices = await fetchHistoricalPrices([ticker], new Date(date));
-  const price = prices?.[ticker] ?? 0;
+
+  console.log("target date is", dateStr);
+  console.log("✅ fetched priceMap:", result);
+  console.log("📅 resolved dateStr:", dateStr);
+  console.log("📈 fetched price:", price);
+
   if (price <= 0) return null; // still no fix
 
   // ✅ Patch the position
   const shares = pos.shares ?? 0;
 
-  // Recalculate costBasis if needed
   const fifoStack = pos.fifoStack ?? [];
   const costBasis =
     pos.costBasis ??
-    fifoStack.reduce((sum, lot) => sum + (lot.shares ?? 0) * (lot.price ?? 0), 0);
+    fifoStack.reduce(
+      (sum, lot) => sum + (lot.shares ?? 0) * (lot.price ?? 0),
+      0
+    );
 
   const marketValue = price * shares;
   const unrealizedPL = marketValue - costBasis;
@@ -46,7 +60,7 @@ export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
   let totalCostBasis = 0;
   let totalPL = 0;
 
-  for (const [_, p] of Object.entries(updatedPositions)) {
+  for (const p of Object.values(updatedPositions)) {
     totalMarketValue += p.marketValue ?? 0;
     totalCostBasis += p.costBasis ?? 0;
     totalPL += p.unrealizedPL ?? 0;
