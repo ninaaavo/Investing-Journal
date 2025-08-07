@@ -18,17 +18,17 @@ export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
   if (!pos || pos.priceAtSnapshot > 0) return pos?.priceAtSnapshot ?? null;
 
   // ✅ Treat date string as UTC to avoid time zone drift
-  console.log("input date", date);
+  // console.log("input date", date);
   const dateStr = date; // trust the original date string
   const result = await fetchHistoricalPrices([ticker], dateStr, dateStr);
   const price = result?.[ticker]?.priceMap?.[dateStr] ?? 0;
 
   // 🧠 price is 0 — refetch it
 
-  console.log("target date is", dateStr);
-  console.log("✅ fetched priceMap:", result);
-  console.log("📅 resolved dateStr:", dateStr);
-  console.log("📈 fetched price:", price);
+  // console.log("target date is", dateStr);
+  // console.log("✅ fetched priceMap:", result);
+  // console.log("📅 resolved dateStr:", dateStr);
+  // console.log("📈 fetched price:", price);
 
   if (price <= 0) return null; // still no fix
 

@@ -4,7 +4,6 @@ import {
   setDoc,
   updateDoc,
   Timestamp,
-  arrayUnion,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
@@ -27,12 +26,29 @@ export async function backfillSnapshotsFrom({
   console.log("backfill is being called");
   console.log("received trade:", newTrade, "with P&L:", pAndL);
 
+  const ticker = newTrade.ticker;
+  const tickers = [ticker];
+  const from = new Date(fromDate);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  const cursor = new Date(fromDate);
-  const tickers = [newTrade.ticker];
+
+  // Get list of all dates to backfill
+  const allDates = [];
+  const cursorForDates = new Date(from);
+  while (cursorForDates <= yesterday) {
+    allDates.push(cursorForDates.toISOString().split("T")[0]);
+    cursorForDates.setDate(cursorForDates.getDate() + 1);
+  }
+
+  // Fetch all historical prices at once
+  const historicalPrices = await fetchHistoricalPrices(
+    tickers,
+    allDates[0],
+    allDates[allDates.length - 1]
+  );
 
   const refetchMap = {};
+  const cursor = new Date(from);
 
   while (cursor <= yesterday) {
     const yyyyMMdd = cursor.toISOString().split("T")[0];
@@ -54,10 +70,6 @@ export async function backfillSnapshotsFrom({
     let cumulativeTrades = 0;
     let cumulativeInvested = 0;
     let cumulativeRealizedPL = 0;
-
-    const ticker = newTrade.ticker;
-    const shares = newTrade.shares;
-    const isShort = newTrade.direction === "short";
 
     if (snapDoc.exists()) {
       const data = snapDoc.data();
@@ -83,12 +95,12 @@ export async function backfillSnapshotsFrom({
 
     if (isExit) {
       if (positions[ticker]) {
-        if (isShort) {
-          positions[ticker].shares += shares;
+        if (newTrade.direction === "short") {
+          positions[ticker].shares += newTrade.shares;
           if (positions[ticker].shares >= 0) delete positions[ticker];
           updatedCash -= newTrade.proceeds;
         } else {
-          positions[ticker].shares -= shares;
+          positions[ticker].shares -= newTrade.shares;
           if (positions[ticker].shares <= 0) delete positions[ticker];
           updatedCash += newTrade.proceeds;
         }
@@ -97,28 +109,31 @@ export async function backfillSnapshotsFrom({
     } else {
       if (!positions[ticker]) {
         positions[ticker] = {
-          shares: isShort ? -shares : shares,
+          shares: newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
           fifoStack: [
             {
-              shares: shares,
+              shares: newTrade.shares,
               price: newTrade.averagePrice,
             },
           ],
         };
       } else {
-        positions[ticker].shares += isShort ? -shares : shares;
+        positions[ticker].shares += newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
         positions[ticker].fifoStack.push({
-          shares: shares,
+          shares: newTrade.shares,
           price: newTrade.averagePrice,
         });
       }
-      updatedCash += isShort ? newTrade.proceeds : -newTrade.cost;
-      cumulativeInvested += newTrade.averagePrice * shares;
+      updatedCash += newTrade.direction === "short"
+        ? newTrade.proceeds
+        : -newTrade.cost;
+
+      cumulativeInvested += newTrade.averagePrice * newTrade.shares;
     }
 
     cumulativeTrades += 1;
 
-    const priceResult = await fetchHistoricalPrices(tickers, yyyyMMdd, yyyyMMdd);
+    const priceResult = historicalPrices;
     let totalMarketValue = 0;
     let totalCostBasis = 0;
     let unrealizedPL = 0;
@@ -181,18 +196,16 @@ export async function backfillSnapshotsFrom({
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  // Update user doc with refetchMap
+  // Update refetchQueue on user document
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   const userData = userSnap.data() || {};
   const existingQueue = userData.refetchQueue || {};
-
   const newQueue = { ...existingQueue };
 
   for (const [ticker, dates] of Object.entries(refetchMap)) {
     const prevDates = newQueue[ticker] ?? [];
-    const mergedDates = Array.from(new Set([...prevDates, ...dates]));
-    newQueue[ticker] = mergedDates;
+    newQueue[ticker] = Array.from(new Set([...prevDates, ...dates]));
   }
 
   await updateDoc(userRef, {
