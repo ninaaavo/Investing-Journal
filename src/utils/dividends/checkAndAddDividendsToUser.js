@@ -3,105 +3,112 @@ import {
   getDoc,
   updateDoc,
   setDoc,
-  collection,
-  addDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase";
 
+function parseDate(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
+function formatDate(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function addOneDay(date) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
 /**
- * Adds eligible dividend payouts to user records on ex-dividend day.
- * 
+ * Batch check dividend payouts over a date range.
+ *
  * @param {Object} params
  * @param {string} params.uid - User ID
- * @param {string} params.dateStr - Snapshot date ("YYYY-MM-DD")
- * @param {Object} params.positions - Current positions at snapshot time
+ * @param {string} params.from - Start date ("YYYY-MM-DD")
+ * @param {string} params.to - End date ("YYYY-MM-DD")
+ * @param {Object} params.positions - { [ticker]: number }
  * @param {Object} params.dividendMap - { [ticker]: { [dateStr]: number } }
- * @param {boolean} [params.writeToSnapshot=true] - Whether to write dividend info into the snapshot doc
+ * @param {boolean} [params.writeToSnapshot=true]
  */
 export async function checkAndAddDividendsToUser({
   uid,
-  dateStr,
+  from,
+  to,
   positions,
   dividendMap,
   writeToSnapshot = true,
 }) {
-  const tickers = Object.keys(positions);
-  const snapshotDividends = {};
-  let totalToday = 0;
+  console.log("🟡 Efficient dividend check from", from, "to", to);
 
-  for (const ticker of tickers) {
-    const dividendAmount = dividendMap?.[ticker]?.[dateStr];
-    if (!dividendAmount) continue;
+  const fromDate = parseDate(from);
+  const toDate = parseDate(to);
+  const dailyDividendMap = {}; // dateStr => array of dividend entries
+  const dailySnapshotMap = {}; // dateStr => snapshot dividends
+  const totalDividendByDate = {}; // dateStr => total for that day
 
-    const shares = positions[ticker]?.shares ?? 0;
-    const totalAmount = shares * dividendAmount;
-    totalToday += totalAmount;
+  for (const [ticker, dateMap] of Object.entries(dividendMap)) {
+    const shares = positions[ticker] ?? 0;
+    if (shares <= 0) continue;
 
-    const entry = {
-      ticker,
-      shares,
-      perShare: dividendAmount,
-      totalAmount,
-      exDate: dateStr,
-      recordedOn: dateStr,
-      createdAt: new Date(),
-    };
+    for (const [dateStr, perShare] of Object.entries(dateMap)) {
+      const date = parseDate(dateStr);
+      if (date < fromDate || date > toDate) continue;
 
-    // ✅ Add to user-level dividend log
-    await addDoc(collection(db, "users", uid, "dividends"), entry);
+      const totalAmount = shares * perShare;
 
-    // ✅ Update monthly dividendHistory summary
-    const monthId = dateStr.slice(0, 7); // "YYYY-MM"
-    const historyRef = doc(db, "users", uid, "dividendHistory", monthId);
-    const historySnap = await getDoc(historyRef);
-    const fieldPath = `tickers.${ticker}`;
-
-    if (historySnap.exists()) {
-      const histData = historySnap.data();
-      const prevTicker = histData.tickers?.[ticker] ?? { total: 0, count: 0 };
-      await updateDoc(historyRef, {
-        total: (histData.total ?? 0) + totalAmount,
-        [`${fieldPath}.total`]: prevTicker.total + totalAmount,
-        [`${fieldPath}.count`]: prevTicker.count + 1,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      await setDoc(historyRef, {
-        period: monthId,
-        total: totalAmount,
-        tickers: {
-          [ticker]: {
-            total: totalAmount,
-            count: 1,
-          },
-        },
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    // ✅ Optionally store in that day's snapshot
-    if (writeToSnapshot) {
-      snapshotDividends[ticker] = {
-        shares,
-        perShare: dividendAmount,
-        totalAmount,
-        exDate: dateStr,
-        recordedOn: dateStr,
+      const entry = {
+        ticker,
+        amountPerShare: perShare,
+        sharesHeld: shares,
+        totalReceived: totalAmount,
+        source: "auto",
       };
+
+      if (!dailyDividendMap[dateStr]) dailyDividendMap[dateStr] = [];
+      dailyDividendMap[dateStr].push(entry);
+
+      if (writeToSnapshot) {
+        if (!dailySnapshotMap[dateStr]) dailySnapshotMap[dateStr] = {};
+        dailySnapshotMap[dateStr][ticker] = {
+          shares,
+          perShare,
+          totalAmount,
+          exDate: dateStr,
+          recordedOn: dateStr,
+        };
+      }
+
+      totalDividendByDate[dateStr] =
+        (totalDividendByDate[dateStr] ?? 0) + totalAmount;
     }
   }
+  console.log("Your daily div map is", dailyDividendMap)
 
-  // ✅ Save dividends field in snapshot if any
-  if (writeToSnapshot && Object.keys(snapshotDividends).length > 0) {
-    const snapshotRef = doc(db, "users", uid, "dailySnapshots", dateStr);
-    await updateDoc(snapshotRef, {
-      dividends: snapshotDividends,
-    });
-  }
+  // Save all results
+  for (const [dateStr, dividends] of Object.entries(dailyDividendMap)) {
+    const totalToday = totalDividendByDate[dateStr];
 
-  // ✅ Update user totalDividendsEarned
-  if (totalToday > 0) {
+    const historyRef = doc(db, "users", uid, "dividendHistory", dateStr);
+    await setDoc(
+      historyRef,
+      {
+        dividends,
+        totalDividendReceived: totalToday,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    if (writeToSnapshot) {
+      const snapshotRef = doc(db, "users", uid, "dailySnapshots", dateStr);
+      await updateDoc(snapshotRef, {
+        dividends: dailySnapshotMap[dateStr],
+      });
+    }
+
     const userRef = doc(db, "users", uid);
     const userSnap = await getDoc(userRef);
     const prevTotal = userSnap.data()?.totalDividendsEarned ?? 0;

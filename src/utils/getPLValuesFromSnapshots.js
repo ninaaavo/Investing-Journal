@@ -65,7 +65,7 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
           const tickersWithZeroPrice = Object.entries(past.positions)
             .filter(([_, pos]) => pos?.priceAtSnapshot === 0)
             .map(([ticker]) => ticker);
-          console.log("ticker w 0 prices are", tickersWithZeroPrice)
+          // console.log("ticker w 0 prices are", tickersWithZeroPrice)
           if (tickersWithZeroPrice.length > 0) {
             for (const ticker of tickersWithZeroPrice) {
               await lazyFixSnapshotPrice({
@@ -90,7 +90,7 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
     let pastUnrealizedPL = 0;
     if (past?.positions) {
       for (const ticker of todayTickers) {
-        console.log("🔍 Checking", ticker);
+        // console.log("🔍 Checking", ticker);
         const todayPos = todaySnapshot.positions[ticker];
         const pastPos = past.positions[ticker];
 
@@ -112,11 +112,11 @@ export async function getPLValuesFromSnapshots(todaySnapshot) {
         const unrealized = marketValue - cost;
         pastUnrealizedPL += unrealized;
 
-        console.log("Today's shares:", todayShares);
-        console.log("Past price/share:", pastPricePerShare);
-        console.log("Market value then:", marketValue);
-        console.log("Cost then:", cost);
-        console.log("Accumulated unrealized P/L:", pastUnrealizedPL);
+        // console.log("Today's shares:", todayShares);
+        // console.log("Past price/share:", pastPricePerShare);
+        // console.log("Market value then:", marketValue);
+        // console.log("Cost then:", cost);
+        // console.log("Accumulated unrealized P/L:", pastUnrealizedPL);
       }
 
       const delta = todayUnrealizedPL - pastUnrealizedPL;

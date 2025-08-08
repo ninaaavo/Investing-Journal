@@ -24,25 +24,31 @@ function addOneDay(date) {
   return newDate;
 }
 
+// Get days between two UTC dates
+function getDaysDiff(start, end) {
+  const diff = end.getTime() - start.getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
 // Main fetch function
 export default async function fetchHistoricalPrices(
   tickers,
   startDate,
   endDate
 ) {
-  console.log("fetch ", tickers, "start", startDate, "end", endDate)
   const result = {};
   const startDateStr = normalizeDateInput(startDate);
   const endDateStr = normalizeDateInput(endDate);
-  const period1 = Math.floor(parseDateStrAsUTC(startDateStr).getTime() / 1000);
-  const period2 = Math.floor(
-    new Date(
-      Date.UTC(...endDateStr.split("-").map(Number), 23, 59, 59, 999)
-    ).getTime() / 1000
-  );
-  console.log("start str", startDateStr, "end st", endDateStr)
+
+  const start = parseDateStrAsUTC(startDateStr);
+  const end = parseDateStrAsUTC(endDateStr);
+  const rangeDays = getDaysDiff(start, new Date()); // from start to today
+  const rangeParam = `${rangeDays}d`;
+
   for (const ticker of tickers) {
-    const url = `${BASE_URL}?ticker=${ticker}&from=${period1}&to=${period2}`;
+    const url = `${BASE_URL}?ticker=${ticker}&range=${rangeParam}`;
+    // console.log("url is", url);
+
     try {
       const res = await fetch(url);
       const data = await res.json();
@@ -60,32 +66,23 @@ export default async function fetchHistoricalPrices(
         const dateStr = formatDate(new Date(timestamps[i] * 1000));
         priceMap[dateStr] = closes[i];
       }
-      console.log("you base price map is", priceMap);
 
       // Fill missing dates with last known price
-      const start = parseDateStrAsUTC(startDateStr);
-      const end = addOneDay(parseDateStrAsUTC(endDateStr)); // ✅ include endDate
-
+      const onePastEnd = addOneDay(end);
       let current = new Date(start);
       let lastKnownPrice = null;
 
-      while (current < end) {
-        // ✅ no longer `<=`, since `end` is one day after real end
+      while (current < onePastEnd) {
         const dateStr = formatDate(current);
-        console.log("on date", dateStr);
 
         if (priceMap[dateStr] == null && lastKnownPrice != null) {
-          console.log("im null, getting lastknown", lastKnownPrice);
           priceMap[dateStr] = lastKnownPrice;
         } else if (priceMap[dateStr] != null) {
           lastKnownPrice = priceMap[dateStr];
         }
 
         current = addOneDay(current);
-        console.log("current is", current)
-        console.log("end date is", end)
       }
-      console.log("end map", priceMap)
 
       // Build dividend map
       for (const key in dividends) {

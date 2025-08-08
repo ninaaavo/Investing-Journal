@@ -383,6 +383,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           },
           tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
           isExit: true,
+          pAndL:pAndL,
         });
       }
       const dateStr = getDateStr(timestamp.toDate()); // Use the backdated timestamp, not today

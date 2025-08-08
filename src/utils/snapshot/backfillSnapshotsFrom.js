@@ -1,67 +1,52 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  Timestamp,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
+import { removeDividendFromUserDay } from "../dividends/removeDividendFromUserDay";
 
-/**
- * @param {string} userId - Firestore UID
- * @param {Date} fromDate - Start date for backfill
- * @param {Object} newTrade - { ticker, shares, averagePrice, direction, entryTimestamp, proceeds, cost }
- * @param {number} pAndL - Realized profit or loss for this trade
- * @param {boolean} isExit - If this is an exit trade
- */
 export async function backfillSnapshotsFrom({
   userId,
   fromDate,
   newTrade,
-  pAndL,
+  pAndL = 0,
   isExit = false,
 }) {
-  console.log("backfill is being called");
-  console.log("received trade:", newTrade, "with P&L:", pAndL);
+  console.log("⏪ Backfilling from:", fromDate);
+  console.log("📘 Trade:", newTrade, "💰 P&L:", pAndL);
 
   const ticker = newTrade.ticker;
-  const tickers = [ticker];
   const from = new Date(fromDate);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
 
-  // Get list of all dates to backfill
   const allDates = [];
-  const cursorForDates = new Date(from);
-  while (cursorForDates <= yesterday) {
-    allDates.push(cursorForDates.toISOString().split("T")[0]);
-    cursorForDates.setDate(cursorForDates.getDate() + 1);
+  const cursor = new Date(from);
+  while (cursor <= yesterday) {
+    allDates.push(cursor.toISOString().split("T")[0]);
+    cursor.setDate(cursor.getDate() + 1);
   }
 
-  // Fetch all historical prices at once
   const historicalPrices = await fetchHistoricalPrices(
-    tickers,
+    [ticker],
     allDates[0],
     allDates[allDates.length - 1]
   );
 
   const refetchMap = {};
-  const cursor = new Date(from);
+  const dateCursor = new Date(from);
 
-  while (cursor <= yesterday) {
-    const yyyyMMdd = cursor.toISOString().split("T")[0];
-    const snapRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
+  while (dateCursor <= yesterday) {
+    const dateStr = dateCursor.toISOString().split("T")[0];
+    const snapRef = doc(db, "users", userId, "dailySnapshots", dateStr);
 
-    const prevDay = new Date(cursor);
-    prevDay.setDate(prevDay.getDate() - 1);
+    const prevDate = new Date(dateCursor);
+    prevDate.setDate(prevDate.getDate() - 1);
     const prevSnapRef = doc(
       db,
       "users",
       userId,
       "dailySnapshots",
-      prevDay.toISOString().split("T")[0]
+      prevDate.toISOString().split("T")[0]
     );
 
     const snapDoc = await getDoc(snapRef);
@@ -93,6 +78,7 @@ export async function backfillSnapshotsFrom({
     const positions = structuredClone(basePositions);
     let updatedCash = baseCash;
 
+    // Trade logic
     if (isExit) {
       if (positions[ticker]) {
         if (newTrade.direction === "short") {
@@ -109,37 +95,36 @@ export async function backfillSnapshotsFrom({
     } else {
       if (!positions[ticker]) {
         positions[ticker] = {
-          shares: newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
+          shares:
+            newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
           fifoStack: [
-            {
-              shares: newTrade.shares,
-              price: newTrade.averagePrice,
-            },
+            { shares: newTrade.shares, price: newTrade.averagePrice },
           ],
         };
       } else {
-        positions[ticker].shares += newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
+        positions[ticker].shares +=
+          newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
+
         positions[ticker].fifoStack.push({
           shares: newTrade.shares,
           price: newTrade.averagePrice,
         });
       }
-      updatedCash += newTrade.direction === "short"
-        ? newTrade.proceeds
-        : -newTrade.cost;
+
+      updatedCash +=
+        newTrade.direction === "short" ? newTrade.proceeds : -newTrade.cost;
 
       cumulativeInvested += newTrade.averagePrice * newTrade.shares;
     }
 
     cumulativeTrades += 1;
 
-    const priceResult = historicalPrices;
     let totalMarketValue = 0;
     let totalCostBasis = 0;
     let unrealizedPL = 0;
 
     for (const ticker in positions) {
-      const price = priceResult?.[ticker]?.priceMap?.[yyyyMMdd] ?? 0;
+      const price = historicalPrices?.[ticker]?.priceMap?.[dateStr] ?? 0;
       const pos = positions[ticker];
       const shares = pos.shares;
       const fifoStack = pos.fifoStack || [];
@@ -162,7 +147,7 @@ export async function backfillSnapshotsFrom({
 
       if (price === 0) {
         if (!refetchMap[ticker]) refetchMap[ticker] = [];
-        refetchMap[ticker].push(yyyyMMdd);
+        refetchMap[ticker].push(dateStr);
       }
     }
 
@@ -171,7 +156,7 @@ export async function backfillSnapshotsFrom({
       totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     await setDoc(snapRef, {
-      date: yyyyMMdd,
+      date: dateStr,
       cash: updatedCash,
       totalAssets,
       totalCostBasis,
@@ -183,20 +168,46 @@ export async function backfillSnapshotsFrom({
       cumulativeTrades,
       cumulativeInvested,
       cumulativeRealizedPL,
-      createdAt: Timestamp.fromDate(new Date(yyyyMMdd)),
+      createdAt: Timestamp.fromDate(new Date(dateStr)),
     });
+    const existingTotalDiv = snapDoc.exists()
+      ? snapDoc.data()?.totalDividendReceived ?? 0
+      : 0;
 
-    await checkAndAddDividendsToUser({
-      uid: userId,
-      dateStr: yyyyMMdd,
-      positions,
-      writeToSnapshot: true,
-    });
+    const injectedDividend =
+      historicalPrices?.[ticker]?.dividendMap?.[dateStr] ?? 0;
+    const sharesHeld = positions?.[ticker]?.shares ?? 0;
+    const addedDividendAmount = injectedDividend * sharesHeld;
 
-    cursor.setDate(cursor.getDate() + 1);
+    if (addedDividendAmount > 0) {
+      await updateDoc(snapRef, {
+        totalDividendReceived: existingTotalDiv + addedDividendAmount,
+      });
+    }
+
+    // Only remove dividends for the affected ticker
+    if (isExit && !positions[ticker]) {
+      await removeDividendFromUserDay(userId, dateStr, ticker);
+    }
+
+    dateCursor.setDate(dateCursor.getDate() + 1);
   }
 
-  // Update refetchQueue on user document
+  // ✅ Batch add dividends only for this ticker
+  const dividendMap = {
+    [ticker]: historicalPrices?.[ticker]?.dividendMap ?? {},
+  };
+
+  await checkAndAddDividendsToUser({
+    uid: userId,
+    from: from.toISOString().split("T")[0],
+    to: yesterday.toISOString().split("T")[0],
+    positions: { [ticker]: newTrade.shares },
+    dividendMap,
+    writeToSnapshot: true,
+  });
+
+  // ✅ Update refetch queue
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   const userData = userSnap.data() || {};

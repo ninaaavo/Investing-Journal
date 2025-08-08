@@ -1,19 +1,10 @@
 import { auth, db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
-import { Timestamp, collection, getDocs } from "firebase/firestore";
+import { Timestamp, collection, getDocs, getDoc, doc } from "firebase/firestore";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 
 const safeParse = (val) => parseFloat(val || 0);
 
-/**
- * Generate snapshot for a given past date using current positions
- * (e.g. generating yesterday's snapshot when user opens app today).
- *
- * @param {Object} options
- * @param {string} options.date - ISO date string (e.g. "2025-08-06")
- * @param {string} options.userId - Firebase UID
- * @returns {Promise<Object>} - The snapshot object
- */
 export default async function generateSnapshotFromCurrentPosition({ date, userId }) {
   const positionsRef = collection(db, "users", userId, "currentPositions");
   const positionsSnap = await getDocs(positionsRef);
@@ -45,10 +36,11 @@ export default async function generateSnapshotFromCurrentPosition({ date, userId
   let cash = 0;
   let netContribution = 0;
 
-  const enrichedPositions = {};
+  const positions = {}; // just ticker: shares
 
   for (const pos of rawPositions) {
-    const price = safeParse(priceMap[pos.ticker]);
+    const ticker = pos.ticker;
+    const price = safeParse(priceMap[ticker]);
     const shares = safeParse(pos.shares);
     const fifoStack = pos.fifoStack || [];
 
@@ -63,13 +55,7 @@ export default async function generateSnapshotFromCurrentPosition({ date, userId
     totalCostBasis += costBasis;
     unrealizedPL += posUnrealizedPL;
 
-    enrichedPositions[pos.ticker] = {
-      ...pos,
-      priceAtSnapshot: price,
-      currentValue: marketValue,
-      costBasis,
-      unrealizedPL: posUnrealizedPL,
-    };
+    positions[ticker] = shares; // ✅ simplified structure
   }
 
   const totalAssets = totalMarketValue + cash;
@@ -78,10 +64,35 @@ export default async function generateSnapshotFromCurrentPosition({ date, userId
   await checkAndAddDividendsToUser({
     uid: userId,
     dateStr,
-    positions: enrichedPositions,
+    positions,
     dividendMap,
     writeToSnapshot: true,
   });
+
+  // Calculate today's dividend from this ticker set
+  let todayDividend = 0;
+  let yesterdayDividend = 0;
+
+  for (const ticker of tickers) {
+    const perShare = dividendMap[ticker]?.[dateStr] ?? 0;
+    const shares = positions[ticker] ?? 0;
+    todayDividend += perShare * shares;
+  }
+
+  const yesterday = new Date(date);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  try {
+    const prevSnapDoc = await getDoc(doc(db, "users", userId, "snapshots", yesterdayStr));
+    yesterdayDividend = prevSnapDoc.exists()
+      ? prevSnapDoc.data()?.totalDividendReceived ?? 0
+      : 0;
+  } catch (err) {
+    console.warn("Could not get yesterday's snapshot:", err.message);
+  }
+
+  const totalDividendReceived = yesterdayDividend + todayDividend;
 
   return {
     date: dateStr,
@@ -89,11 +100,12 @@ export default async function generateSnapshotFromCurrentPosition({ date, userId
     invested: totalMarketValue,
     totalAssets,
     netContribution,
-    positions: enrichedPositions,
+    positions, // ✅ now just { ticker: shares }
     unrealizedPL,
     totalCostBasis,
     totalMarketValue,
     totalPLPercent,
-    createdAt: Timestamp.fromDate(new Date(dateStr))
+    totalDividendReceived,
+    createdAt: Timestamp.fromDate(new Date(dateStr)),
   };
 }

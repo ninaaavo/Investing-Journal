@@ -21,9 +21,8 @@ export async function calculateLiveSnapshot() {
     tickers.push(data.ticker);
   });
 
-  const priceMap = await getStockPrices(tickers);
+  const priceData = await getStockPrices(tickers); // Must return { [ticker]: { price: number } }
 
-  // Get financial metrics
   const financialRef = doc(db, "users", user.uid, "metrics", "financial");
   const financialSnap = await getDoc(financialRef);
   const financialData = financialSnap.exists() ? financialSnap.data() : {};
@@ -34,12 +33,13 @@ export async function calculateLiveSnapshot() {
   let totalMarketValue = 0;
   let totalCostBasis = 0;
   let unrealizedPL = 0;
+
   const enrichedPositions = {};
 
   for (const pos of rawPositions) {
-    const price = safeParse(priceMap[pos.ticker]);
+    const ticker = pos.ticker;
+    const price = safeParse(priceData[ticker]?.price);
     const shares = safeParse(pos.shares);
-
     const fifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
 
     // Cost basis from FIFO
@@ -48,7 +48,7 @@ export async function calculateLiveSnapshot() {
       0
     );
 
-    // Fallback to averagePrice if FIFO is empty or invalid
+    // Fallback to averagePrice if FIFO is empty
     if (costBasis === 0 && pos.averagePrice && shares > 0) {
       costBasis = shares * safeParse(pos.averagePrice);
     }
@@ -60,7 +60,7 @@ export async function calculateLiveSnapshot() {
     totalCostBasis += costBasis;
     unrealizedPL += posUnrealizedPL;
 
-    enrichedPositions[pos.ticker] = {
+    enrichedPositions[ticker] = {
       ...pos,
       priceAtSnapshot: price,
       currentValue: marketValue,
@@ -72,6 +72,22 @@ export async function calculateLiveSnapshot() {
   const totalAssets = totalMarketValue + cash;
   const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
+  // ✅ Get totalDividendReceived from yesterday's snapshot
+  let totalDividendReceived = 0;
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  try {
+    const prevSnapDoc = await getDoc(doc(db, "users", user.uid, "snapshots", yesterdayStr));
+    totalDividendReceived = prevSnapDoc.exists()
+      ? prevSnapDoc.data()?.totalDividendReceived ?? 0
+      : 0;
+  } catch (err) {
+    console.warn("Could not fetch yesterday's snapshot dividend:", err.message);
+  }
+
   return {
     cash,
     invested: totalMarketValue,
@@ -82,6 +98,7 @@ export async function calculateLiveSnapshot() {
     totalCostBasis,
     totalMarketValue,
     totalPLPercent,
+    totalDividendReceived,
     createdAt: Timestamp.now(),
   };
 }

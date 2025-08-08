@@ -452,6 +452,7 @@ export default function InputForm() {
             entryTimestamp: form.entryTimestamp,
           },
           tradeCost: form.direction === "long" ? tradeCost : 0,
+          isExit: false
         };
 
         // Case 1: update firstSnapshotDate if earlier

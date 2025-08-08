@@ -1,5 +1,6 @@
 import { doc, setDoc, Timestamp } from "firebase/firestore";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
+import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { db } from "../../firebase";
 
 const safeParse = (val) => parseFloat(val || 0);
@@ -13,9 +14,16 @@ const safeParse = (val) => parseFloat(val || 0);
  * @param {string} options.end - ISO date string (e.g. "2025-08-05")
  * @param {Object} options.baseSnapshot - Snapshot representing the day before start
  * @param {string} options.userId - Firebase UID
+ * @param {Object} options.dividendMap - { [ticker]: { [dateStr]: number } }
  * @returns {Promise<Object>} - The final snapshot for the end date
  */
-export default async function generateSnapshotRange({ start, end, baseSnapshot, userId }) {
+export default async function generateSnapshotRange({
+  start,
+  end,
+  baseSnapshot,
+  userId,
+  dividendMap = {},
+}) {
   const startDate = new Date(start);
   const endDate = new Date(end);
 
@@ -27,7 +35,7 @@ export default async function generateSnapshotRange({ start, end, baseSnapshot, 
   }
 
   const tickers = Object.keys(baseSnapshot.positions || {});
-  if (tickers.length === 0) return baseSnapshot; // nothing to generate
+  if (tickers.length === 0) return baseSnapshot;
 
   const historical = await fetchHistoricalPrices(tickers, start, end);
 
@@ -38,7 +46,7 @@ export default async function generateSnapshotRange({ start, end, baseSnapshot, 
     let totalCostBasis = 0;
     let unrealizedPL = 0;
 
-    const enrichedPositions = {};
+    const positions = {}; // ticker: shares
 
     for (const ticker of tickers) {
       const pos = currentSnapshot.positions[ticker];
@@ -59,17 +67,12 @@ export default async function generateSnapshotRange({ start, end, baseSnapshot, 
       totalCostBasis += costBasis;
       unrealizedPL += posUnrealizedPL;
 
-      enrichedPositions[ticker] = {
-        ...pos,
-        priceAtSnapshot: price,
-        currentValue: marketValue,
-        costBasis,
-        unrealizedPL: posUnrealizedPL,
-      };
+      positions[ticker] = shares; // ✅ simplified
     }
 
     const totalAssets = totalMarketValue + safeParse(currentSnapshot.cash);
-    const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+    const totalPLPercent =
+      totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     const snapshot = {
       date: dateStr,
@@ -77,17 +80,41 @@ export default async function generateSnapshotRange({ start, end, baseSnapshot, 
       invested: totalMarketValue,
       totalAssets,
       netContribution: safeParse(currentSnapshot.netContribution),
-      positions: enrichedPositions,
+      positions, // ✅ simplified
       unrealizedPL,
       totalCostBasis,
       totalMarketValue,
       totalPLPercent,
-      createdAt: Timestamp.fromDate(new Date(dateStr))
+      createdAt: Timestamp.fromDate(new Date(dateStr)),
     };
 
     await setDoc(doc(db, "users", userId, "snapshots", dateStr), snapshot);
+
+    // ✅ Inject dividends for this date
+    await checkAndAddDividendsToUser({
+      uid: userId,
+      dateStr,
+      positions,
+      dividendMap,
+      writeToSnapshot: true,
+    });
+
+    // ✅ Calculate today's dividend (from 1 ticker only per day)
+    let todayDividend = 0;
+    for (const [ticker, divMap] of Object.entries(dividendMap)) {
+      const perShare = divMap?.[dateStr] ?? 0;
+      const shares = positions[ticker] ?? 0;
+      todayDividend += perShare * shares;
+    }
+
+    const prevTotalDiv = currentSnapshot.totalDividendReceived ?? 0;
+    snapshot.totalDividendReceived = prevTotalDiv + todayDividend;
+
+    // ✅ Save snapshot again with the dividend field
+    await setDoc(doc(db, "users", userId, "snapshots", dateStr), snapshot);
+
     currentSnapshot = snapshot;
   }
 
-  return currentSnapshot; // final snapshot for end date
+  return currentSnapshot;
 }
