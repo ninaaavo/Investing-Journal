@@ -1,8 +1,8 @@
 import { auth } from "../firebase";
-import { calculateLiveSnapshot } from "./snapshot/calculateLiveSnapshot"; // adjust the path if needed
+import { getCachedLiveSnapshot } from "./snapshot/getCachedLiveSnapshot"; // Adjust path as needed
 
 /**
- * Fetches best/worst performer from today's live snapshot.
+ * Fetches best/worst performer from today's cached live snapshot.
  * @param {boolean} usePercentage - Whether to use % P/L or $ P/L
  * @returns {Promise<{ best: string, worst: string }>}
  */
@@ -12,9 +12,9 @@ export async function getBestWorstPerformers(usePercentage = true) {
 
   let snapshot;
   try {
-    snapshot = await calculateLiveSnapshot();
+    snapshot = await getCachedLiveSnapshot(user.uid); // ⬅️ now uses cached snapshot
   } catch (error) {
-    console.error("Failed to calculate live snapshot:", error);
+    console.error("Failed to get live snapshot:", error);
     return { best: "N/A", worst: "N/A" };
   }
 

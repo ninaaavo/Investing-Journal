@@ -15,19 +15,38 @@ import generateSnapshotRange from "./generateSnapshotRange";
 import generateSnapshotFromCurrentPosition from "./generateSnapshotFromCurrentPosition";
 
 export default async function getOrGenerateSnapshot(dateStr) {
+  console.log("im checking", dateStr);
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
   const uid = user.uid;
 
-  const snapshotRef = doc(db, "users", uid, "snapshots", dateStr);
+  const snapshotRef = doc(db, "users", uid, "dailySnapshots", dateStr);
   const snapshotDoc = await getDoc(snapshotRef);
+  // console.log("your snapshot doc exist is", snapshotDoc.exists())
+  // console.log("the data get returned is")
   if (snapshotDoc.exists()) return snapshotDoc.data();
 
+  function stripTime(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
   const today = new Date();
-  const dateObj = new Date(dateStr);
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const isYesterday = isSameDay(dateObj, yesterday);
+  console.log("today is", today);
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const dateObj = new Date(year, month - 1, day); // Local time at midnight
+  const yesterday = stripTime(new Date());
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  console.log(
+    "dateobj is",
+    dateObj.getTime(),
+    "yesterday is",
+    yesterday.getTime()
+  );
+
+  const isYesterday = dateObj.getTime() === yesterday.getTime();
+  console.log("Is yesterday is", isYesterday);
 
   // Step 1: Find latest snapshot before dateStr
   const snapshotsRef = collection(db, "users", uid, "snapshots");
@@ -60,6 +79,7 @@ export default async function getOrGenerateSnapshot(dateStr) {
 
   // If the date requested is yesterday, use current positions
   if (isYesterday) {
+    console.log("Im checking yesterday");
     const snapshot = await generateSnapshotFromCurrentPosition({
       date: dateStr,
       userId: uid,
@@ -70,6 +90,7 @@ export default async function getOrGenerateSnapshot(dateStr) {
   }
 
   // Else, backfill from last known snapshot
+  console.log("im generate range from", startDateStr, "end", dateStr);
   const snapshot = await generateSnapshotRange({
     start: startDateStr,
     end: dateStr,

@@ -46,7 +46,8 @@ export default async function generateSnapshotRange({
     let totalCostBasis = 0;
     let unrealizedPL = 0;
 
-    const positions = {}; // ticker: shares
+    const enrichedPositions = {};
+    const simplifiedPositions = {};
 
     for (const ticker of tickers) {
       const pos = currentSnapshot.positions[ticker];
@@ -66,13 +67,34 @@ export default async function generateSnapshotRange({
       totalMarketValue += marketValue;
       totalCostBasis += costBasis;
       unrealizedPL += posUnrealizedPL;
+      enrichedPositions[ticker] = {
+        costBasis,
+        fifoStack,
+        marketValue,
+        priceAtSnapshot: price,
+        shares,
+        unrealizedPL: posUnrealizedPL,
+      };
 
-      positions[ticker] = shares; // ✅ simplified
+      simplifiedPositions[ticker] = shares;
     }
 
     const totalAssets = totalMarketValue + safeParse(currentSnapshot.cash);
     const totalPLPercent =
       totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+
+    const { totalDividendByDate, dailyDividendMap } =
+      await checkAndAddDividendsToUser({
+        uid: userId,
+        from: dateStr,
+        to: dateStr,
+        positions: simplifiedPositions,
+        dividendMap,
+        writeToSnapshot: false,
+      });
+
+    const todayDividend = totalDividendByDate[dateStr] ?? 0;
+    const prevTotalDiv = currentSnapshot.totalDividendReceived ?? 0;
 
     const snapshot = {
       date: dateStr,
@@ -80,39 +102,17 @@ export default async function generateSnapshotRange({
       invested: totalMarketValue,
       totalAssets,
       netContribution: safeParse(currentSnapshot.netContribution),
-      positions, // ✅ simplified
+      positions: enrichedPositions,
       unrealizedPL,
       totalCostBasis,
       totalMarketValue,
       totalPLPercent,
+      totalDividendReceived: prevTotalDiv + todayDividend,
+      dividends: dailyDividendMap[dateStr] ?? [],
       createdAt: Timestamp.fromDate(new Date(dateStr)),
     };
 
-    await setDoc(doc(db, "users", userId, "snapshots", dateStr), snapshot);
-
-    // ✅ Inject dividends for this date
-    await checkAndAddDividendsToUser({
-      uid: userId,
-      dateStr,
-      positions,
-      dividendMap,
-      writeToSnapshot: true,
-    });
-
-    // ✅ Calculate today's dividend (from 1 ticker only per day)
-    let todayDividend = 0;
-    for (const [ticker, divMap] of Object.entries(dividendMap)) {
-      const perShare = divMap?.[dateStr] ?? 0;
-      const shares = positions[ticker] ?? 0;
-      todayDividend += perShare * shares;
-    }
-
-    const prevTotalDiv = currentSnapshot.totalDividendReceived ?? 0;
-    snapshot.totalDividendReceived = prevTotalDiv + todayDividend;
-
-    // ✅ Save snapshot again with the dividend field
-    await setDoc(doc(db, "users", userId, "snapshots", dateStr), snapshot);
-
+    await setDoc(doc(db, "users", userId, "dailySnapshots", dateStr), snapshot);
     currentSnapshot = snapshot;
   }
 

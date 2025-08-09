@@ -116,5 +116,12 @@ export async function checkAndAddDividendsToUser({
     await updateDoc(userRef, {
       totalDividendsEarned: prevTotal + totalToday,
     });
+
   }
+  console.log("im returning totaldiv by date", totalDividendByDate, "from", from, "to", to)
+  return {
+  dailyDividendMap,
+  totalDividendByDate,
+};
+
 }
