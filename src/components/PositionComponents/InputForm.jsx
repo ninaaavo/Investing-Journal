@@ -23,6 +23,7 @@ import { toast } from "react-toastify";
 import DateTimeInput from "./DateTimeInput";
 import { useUser } from "../../context/UserContext";
 import { getDateStr } from "../../utils/getDateStr";
+import { invalidateLiveSnapshot } from "../../utils/snapshot/invalidateLiveSnapshot";
 
 export default function InputForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -470,6 +471,7 @@ export default function InputForm() {
         backfillSnapshotsFrom(tradeDetails).catch((err) =>
           console.error("❌ Backfill failed in background:", err)
         );
+        invalidateLiveSnapshot();
         incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
       }
 

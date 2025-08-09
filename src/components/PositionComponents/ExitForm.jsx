@@ -23,6 +23,23 @@ import { getDateStr } from "../../utils/getDateStr"; // format: YYYY-MM-DD
 import DateTimeInput from "./DateTimeInput";
 import { backfillSnapshotsFrom } from "../../utils/snapshot/backfillSnapshotsFrom";
 import { useUser } from "../../context/UserContext";
+import { invalidateLiveSnapshot } from "../../utils/snapshot/invalidateLiveSnapshot";
+function getAveragePriceFromFIFO(fifoStack = []) {
+  let totalShares = 0;
+  let totalCost = 0;
+
+  for (const lot of fifoStack) {
+    const shares = parseFloat(lot.sharesRemaining ?? 0);
+    const price = parseFloat(lot.entryPrice ?? 0);
+
+    if (!isNaN(shares) && shares > 0 && !isNaN(price)) {
+      totalShares += shares;
+      totalCost += shares * price;
+    }
+  }
+
+  return totalShares > 0 ? totalCost / totalShares : 0;
+}
 
 function buildTimestamp(dateStr, timeStr) {
   if (!dateStr) return { timestamp: null, timeIncluded: false };
@@ -49,7 +66,7 @@ const EXIT_REASONS = [
 
 export default function ExitForm({ onSubmit, onClose, stock }) {
   const [error, setError] = useState("");
-  const { incrementRefresh } = useUser();
+  const { incrementRefresh, refreshSnapshot, forceLiveSnapshotNow  } = useUser();
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
@@ -189,6 +206,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       const currentData = currentDoc.data();
       const currentShares = currentData.shares;
       const fifoStack = currentData.fifoStack || [];
+      const currentAvgPrice = currentData.averagePrice;
 
       if (currentShares < exitShares) {
         alert("You don't have enough shares to sell.");
@@ -355,6 +373,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           shares: remainingShares,
           fifoStack: newFifoStack,
           lastUpdated: serverTimestamp(),
+          averagePrice: getAveragePriceFromFIFO(newFifoStack),
         });
       } else {
         await deleteDoc(currentPosRef); // fully closed
@@ -383,7 +402,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           },
           tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
           isExit: true,
-          pAndL:pAndL,
+          pAndL: pAndL,
         });
       }
       const dateStr = getDateStr(timestamp.toDate()); // Use the backdated timestamp, not today
@@ -530,9 +549,8 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           leastReliableChecklistItem: leastReliable,
         });
       }
-
-      incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
-
+      invalidateLiveSnapshot();
+      incrementRefresh();
       setIsSubmitting(false); // ✅ done
     } catch (err) {
       setIsSubmitting(false);
