@@ -1,14 +1,11 @@
 import { BrowserRouter } from "react-router-dom";
 import AppRoutes from "./routes";
 import NavBar from "./components/NavBar";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "./firebase";
-import getOrGenerateSnapshot from "./utils/snapshot/getOrGenerateSnapshot";
+import { useEffect } from "react";
 import { getDateStr } from "./utils/getDateStr";
-import { UserProvider } from "./context/UserContext";
+import { UserProvider, useUser } from "./context/UserContext";
 import { maybeRunDailyHoldingUpdate } from "./utils/maybeRunDailyHoldingUpdate";
 import {
   doc,
@@ -20,114 +17,86 @@ import {
   orderBy,
   where,
   getDocs,
-  updateDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { retryRefetchQueue } from "./utils/retryRefetchQueue";
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [todaySnapshot, setTodaySnapshot] = useState(null);
+function AppContent() {
+  const { user, loading, refreshSnapshot } = useUser();
 
+  // Kick off any queued refetch work once we have a user
   useEffect(() => {
-  if (user?.uid) {
-    retryRefetchQueue(user.uid);
-  }
-}, [user]);
+    if (user?.uid) retryRefetchQueue(user.uid);
+  }, [user?.uid]);
 
+  // Init today's realized P/L doc (if missing) and run daily holding update
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setAuthChecked(true);
+    if (!user?.uid) return;
 
-      if (currentUser) {
-        const today = getDateStr();
-        const snap = await getOrGenerateSnapshot(today);
-        setTodaySnapshot(snap);
-
-        const realizedPLRef = doc(
-          db,
-          "users",
-          currentUser.uid,
-          "realizedPLByDate",
-          today
-        );
-        const plDoc = await getDoc(realizedPLRef);
-
-        if (!plDoc.exists()) {
-          const previousPL = await getMostRecentRealizedPL(
-            currentUser.uid,
-            today
-          );
-
-          await setDoc(realizedPLRef, {
-            realizedPL: previousPL,
-            date: today,
-            createdAt: Timestamp.now(),
-          });
-        }
-
-        // ✅ Run daily holding duration update
-        await maybeRunDailyHoldingUpdate(currentUser.uid, today);
-      }
-
-      async function getMostRecentRealizedPL(userId, todayStr) {
-        const colRef = collection(db, "users", userId, "realizedPLByDate");
-        const q = query(
-          colRef,
-          where("date", "<", todayStr),
-          orderBy("date", "desc")
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          return snap.docs[0].data().realizedPL;
-        }
-        return 0;
-      }
-
-      
-    });
-
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-  function scheduleMidnightUpdate(uid) {
-    const now = new Date();
-    const nextMidnight = new Date();
-    nextMidnight.setHours(24, 0, 5, 0); // 12:00:05 AM buffer
-    const msUntilMidnight = nextMidnight - now;
-
-    const timer = setTimeout(async () => {
+    (async () => {
       const today = getDateStr();
 
-      // 🔁 Re-run holding update
-      await maybeRunDailyHoldingUpdate(uid, today);
+      // Ensure today's realized P/L doc exists (carry forward previous value)
+      const realizedPLRef = doc(db, "users", user.uid, "realizedPLByDate", today);
+      const plDoc = await getDoc(realizedPLRef);
 
-      // 🔁 Re-fetch snapshot
-      const updatedSnap = await getOrGenerateSnapshot(today);
-      setTodaySnapshot(updatedSnap);
+      if (!plDoc.exists()) {
+        const previousPL = await getMostRecentRealizedPL(user.uid, today);
+        await setDoc(realizedPLRef, {
+          realizedPL: previousPL,
+          date: today,
+          createdAt: Timestamp.now(),
+        });
+      }
 
-      // ✅ Optional toast
-      toast.success("✅ Portfolio updated for the new day", {
-        position: "bottom-right",
-      });
+      // Daily holding duration update
+      await maybeRunDailyHoldingUpdate(user.uid, today);
+    })();
 
-      // 🕛 Schedule the next update
-      scheduleMidnightUpdate(uid);
-    }, msUntilMidnight);
+    async function getMostRecentRealizedPL(userId, todayStr) {
+      const colRef = collection(db, "users", userId, "realizedPLByDate");
+      const q = query(colRef, where("date", "<", todayStr), orderBy("date", "desc"));
+      const snap = await getDocs(q);
+      return snap.empty ? 0 : snap.docs[0].data().realizedPL;
+    }
+  }, [user?.uid]);
 
-    return () => clearTimeout(timer);
-  }
+  // Schedule midnight rollover: re-run holding update + refresh LIVE snapshot from context
+  useEffect(() => {
+    if (!user?.uid) return;
 
-  if (user) {
-    scheduleMidnightUpdate(user.uid);
-  }
-}, [user]);
+    const scheduleMidnightUpdate = (uid) => {
+      const now = new Date();
+      const nextMidnight = new Date();
+      nextMidnight.setHours(24, 0, 5, 0); // 12:00:05 AM buffer
+      const msUntilMidnight = nextMidnight - now;
 
+      const timer = setTimeout(async () => {
+        const today = getDateStr();
 
-  if (!authChecked) {
+        await maybeRunDailyHoldingUpdate(uid, today);
+
+        // Re-fetch LIVE snapshot via context (no DB generation for "today")
+        try {
+          await refreshSnapshot();
+        } catch (e) {
+          console.error("Midnight refresh failed:", e);
+        }
+
+        toast.success("✅ Portfolio updated for the new day", { position: "bottom-right" });
+
+        // Schedule the next day
+        scheduleMidnightUpdate(uid);
+      }, msUntilMidnight);
+
+      return () => clearTimeout(timer);
+    };
+
+    const cleanup = scheduleMidnightUpdate(user.uid);
+    return cleanup;
+  }, [user?.uid, refreshSnapshot]);
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-[#b2dfdb] via-[#a5d6a7] to-[#dcedc8] text-[var(--color-text)] overflow-y-hidden">
         <p className="text-xl font-semibold">Loading...</p>
@@ -136,16 +105,23 @@ function App() {
   }
 
   return (
-    <UserProvider value={{ user, todaySnapshot }}>
-      <BrowserRouter className="overflow-hidden">
-        <ToastContainer position="top-center" autoClose={2000} />
-        <div className="min-h-screen bg-gradient-to-r from-[#b2dfdb] via-[#a5d6a7] to-[#dcedc8] bg-[length:200%_200%] animate-gradient-x px-[60px] py-[30px] text-[var(--color-text)]">
-          <div className="flex flex-col gap-4">
-            <NavBar user={user} />
-            <AppRoutes />
-          </div>
+    <BrowserRouter className="overflow-hidden">
+      <ToastContainer position="top-center" autoClose={2000} />
+      <div className="min-h-screen bg-gradient-to-r from-[#b2dfdb] via-[#a5d6a7] to-[#dcedc8] bg-[length:200%_200%] animate-gradient-x px-[60px] py-[30px] text-[var(--color-text)]">
+        <div className="flex flex-col gap-4">
+          {/* NavBar can keep accepting user as prop if it expects it */}
+          <NavBar user={user} />
+          <AppRoutes />
         </div>
-      </BrowserRouter>
+      </div>
+    </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <UserProvider>
+      <AppContent />
     </UserProvider>
   );
 }
