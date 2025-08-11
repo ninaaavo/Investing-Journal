@@ -1,30 +1,53 @@
-import { getDocs, collection, doc, getDoc, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  Timestamp,
+  getDocsFromServer,
+  getDocFromServer,
+} from "firebase/firestore";
 import { db, auth } from "../../firebase";
 import getStockPrices from "../prices/getStockPrices";
 
 const safeParse = (val) => parseFloat(val || 0);
 
+/** Yesterday in ET as YYYY-MM-DD */
+function yesterdayStrET() {
+  const todayET = new Date(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York" }).format(
+      new Date()
+    )
+  );
+  todayET.setDate(todayET.getDate() - 1);
+  const y = todayET.getFullYear();
+  const m = String(todayET.getMonth() + 1).padStart(2, "0");
+  const d = String(todayET.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export async function calculateLiveSnapshot() {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
+  // 🔒 Force server reads to avoid stale cache after writes
   const positionsRef = collection(db, "users", user.uid, "currentPositions");
-  const positionsSnap = await getDocs(positionsRef);
+  const positionsSnap = await getDocsFromServer(positionsRef);
 
   const rawPositions = [];
   const tickers = [];
 
-  positionsSnap.forEach((doc) => {
-    const data = doc.data();
+  positionsSnap.forEach((snap) => {
+    const data = snap.data();
     if (!data.ticker || !data.shares) return;
-    rawPositions.push({ id: doc.id, ...data });
+    rawPositions.push({ id: snap.id, ...data });
     tickers.push(data.ticker);
   });
 
-  const priceData = await getStockPrices(tickers); // Must return { [ticker]: { price: number } }
+  const priceData = await getStockPrices(tickers); // { [ticker]: { price } } or { [ticker]: number }
+  console.log("your price data is", priceData);
 
+  // 🔒 Force server read for financial metrics too
   const financialRef = doc(db, "users", user.uid, "metrics", "financial");
-  const financialSnap = await getDoc(financialRef);
+  const financialSnap = await getDocFromServer(financialRef);
   const financialData = financialSnap.exists() ? financialSnap.data() : {};
 
   const cash = safeParse(financialData.cash);
@@ -38,17 +61,25 @@ export async function calculateLiveSnapshot() {
 
   for (const pos of rawPositions) {
     const ticker = pos.ticker;
-    const price = safeParse(priceData[ticker]?.price);
+
+    // accept either {ticker: {price}} or {ticker: number}
+    const raw = priceData?.[ticker];
+    const price = safeParse(
+      raw && typeof raw === "object" ? raw.price : raw
+    );
+
     const shares = safeParse(pos.shares);
     const fifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
 
-    // Cost basis from FIFO
-    let costBasis = fifoStack.reduce(
-      (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),
-      0
-    );
+    // ✅ Use your stack’s shape first (sharesRemaining, entryPrice), then fallback
+    let costBasis = fifoStack.reduce((sum, lot) => {
+      const lotShares =
+        safeParse(lot.sharesRemaining ?? lot.shares ?? 0);
+      const lotPrice =
+        safeParse(lot.entryPrice ?? lot.price ?? 0);
+      return sum + lotShares * lotPrice;
+    }, 0);
 
-    // Fallback to averagePrice if FIFO is empty
     if (costBasis === 0 && pos.averagePrice && shares > 0) {
       costBasis = shares * safeParse(pos.averagePrice);
     }
@@ -72,20 +103,17 @@ export async function calculateLiveSnapshot() {
   const totalAssets = totalMarketValue + cash;
   const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
-  // ✅ Get totalDividendReceived from yesterday's snapshot
+  // ✅ Get totalDividendReceived from yesterday’s snapshot (ET‑correct)
   let totalDividendReceived = 0;
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split("T")[0];
-
+  const yesterdayStr = yesterdayStrET();
   try {
-    const prevSnapDoc = await getDoc(doc(db, "users", user.uid, "snapshots", yesterdayStr));
-    totalDividendReceived = prevSnapDoc.exists()
-      ? prevSnapDoc.data()?.totalDividendReceived ?? 0
+    const prevSnapRef = doc(db, "users", user.uid, "snapshots", yesterdayStr);
+    const prevSnap = await getDocFromServer(prevSnapRef);
+    totalDividendReceived = prevSnap.exists()
+      ? safeParse(prevSnap.data()?.totalDividendReceived)
       : 0;
   } catch (err) {
-    console.warn("Could not fetch yesterday's snapshot dividend:", err.message);
+    console.warn("Could not fetch yesterday's snapshot dividend:", err?.message || err);
   }
 
   return {

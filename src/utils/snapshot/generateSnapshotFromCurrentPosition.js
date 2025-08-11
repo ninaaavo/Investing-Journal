@@ -61,7 +61,10 @@ export default async function generateSnapshotFromCurrentPosition({
     const ticker = pos.ticker;
     const price = safeParse(priceMap[ticker]);
     const shares = safeParse(pos.shares);
-    const fifoStack = pos.fifoStack || [];
+    const fifoStack = (pos.fifoStack || []).map((e) => ({
+      price: e.entryPrice,
+      shares: e.sharesRemaining,
+    }));
 
     const costBasis = fifoStack.reduce(
       (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),

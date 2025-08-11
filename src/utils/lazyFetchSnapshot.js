@@ -25,10 +25,10 @@ export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
 
   // 🧠 price is 0 — refetch it
 
-  // console.log("target date is", dateStr);
-  // console.log("✅ fetched priceMap:", result);
-  // console.log("📅 resolved dateStr:", dateStr);
-  // console.log("📈 fetched price:", price);
+  console.log("target date is", dateStr);
+  console.log("✅ fetched priceMap:", result);
+  console.log("📅 resolved dateStr:", dateStr);
+  console.log("📈 fetched price:", price);
 
   if (price <= 0) return null; // still no fix
 

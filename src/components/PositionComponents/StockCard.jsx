@@ -20,7 +20,7 @@ export default function StockCard({
   const cardRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [anchorRect, setAnchorRect] = useState(null);
-  console.log("im stock card, today snap is", todaySnapshot);
+  // console.log("im stock card, today snap is", todaySnapshot);
 
   // Helper: try multiple shapes your snapshot might use
   const getLivePriceFromSnapshot = (snap, tkr) => {

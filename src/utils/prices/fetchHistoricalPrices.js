@@ -31,23 +31,19 @@ function getDaysDiff(start, end) {
 }
 
 // Main fetch function
-export default async function fetchHistoricalPrices(
-  tickers,
-  startDate,
-  endDate
-) {
+export default async function fetchHistoricalPrices(tickers, startDate, endDate) {
+  console.log("im fetching", tickers, "from", startDate, "to", endDate)
   const result = {};
   const startDateStr = normalizeDateInput(startDate);
   const endDateStr = normalizeDateInput(endDate);
 
   const start = parseDateStrAsUTC(startDateStr);
   const end = parseDateStrAsUTC(endDateStr);
-  const rangeDays = getDaysDiff(start, new Date()); // from start to today
-  const rangeParam = `${rangeDays}d`;
+  const rangeDays = getDaysDiff(start, new Date()); // from start to today (for Yahoo "range")
+  const rangeParam = `${Math.max(1, rangeDays)}d`;
 
   for (const ticker of tickers) {
-    const url = `${BASE_URL}?ticker=${ticker}&range=${rangeParam}`;
-    // console.log("url is", url);
+    const url = `${BASE_URL}?ticker=${encodeURIComponent(ticker)}&range=${rangeParam}`;
 
     try {
       const res = await fetch(url);
@@ -58,36 +54,54 @@ export default async function fetchHistoricalPrices(
       const closes = r?.indicators?.quote?.[0]?.close ?? [];
       const dividends = r?.events?.dividends ?? {};
 
+      // Build base price map from Yahoo candles
       const priceMap = {};
-      const dividendMap = {};
-
-      // Build base price map
       for (let i = 0; i < timestamps.length; i++) {
-        const dateStr = formatDate(new Date(timestamps[i] * 1000));
-        priceMap[dateStr] = closes[i];
+        const dateStr = formatDate(new Date(timestamps[i] * 1000)); // "YYYY-MM-DD"
+        // Only keep points up to end (we'll fill the rest)
+        if (dateStr <= endDateStr) {
+          priceMap[dateStr] = closes[i];
+        }
       }
 
-      // Fill missing dates with last known price
+      // ---- Fill missing days from the nearest prior known trading day ----
       const onePastEnd = addOneDay(end);
       let current = new Date(start);
-      let lastKnownPrice = null;
 
+      // Seed lastKnownPrice with the latest known date <= startDate
+      let lastKnownPrice = null;
+      const knownDates = Object.keys(priceMap).sort(); // lexicographic works for YYYY-MM-DD
+      if (knownDates.length) {
+        for (let i = knownDates.length - 1; i >= 0; i--) {
+          if (knownDates[i] <= startDateStr) {
+            lastKnownPrice = priceMap[knownDates[i]];
+            break;
+          }
+        }
+      }
+
+      // Walk forward day-by-day, filling gaps with lastKnownPrice
       while (current < onePastEnd) {
         const dateStr = formatDate(current);
 
-        if (priceMap[dateStr] == null && lastKnownPrice != null) {
-          priceMap[dateStr] = lastKnownPrice;
-        } else if (priceMap[dateStr] != null) {
+        if (priceMap[dateStr] == null) {
+          if (lastKnownPrice != null) {
+            priceMap[dateStr] = lastKnownPrice; // weekend/holiday gets prior trading day's close
+          }
+          // else: no earlier data exists yet; leave undefined until we hit a real data day
+        } else {
+          // Update seed whenever we hit a real trading day
           lastKnownPrice = priceMap[dateStr];
         }
 
         current = addOneDay(current);
       }
 
-      // Build dividend map
-      for (const key in dividends) {
-        const dateStr = formatDate(new Date(dividends[key].date * 1000));
-        dividendMap[dateStr] = dividends[key].amount;
+      // Build dividend map (keyed by YYYY-MM-DD)
+      const dividendMap = {};
+      for (const k in dividends) {
+        const dStr = formatDate(new Date(dividends[k].date * 1000));
+        dividendMap[dStr] = dividends[k].amount;
       }
 
       result[ticker] = { priceMap, dividendMap };

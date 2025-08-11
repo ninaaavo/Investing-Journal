@@ -42,6 +42,6 @@ export async function getSectorBreakdownData(userId) {
     }))
     .sort((a, b) => b.value - a.value);
 
-  console.log("i got breakdown being", breakdown);
+  // console.log("i got breakdown being", breakdown);
   return breakdown;
 }
