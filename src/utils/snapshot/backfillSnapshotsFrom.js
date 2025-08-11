@@ -9,7 +9,6 @@ function toIsoDate(d) {
   z.setHours(0, 0, 0, 0);
   return z.toISOString().split("T")[0];
 }
-
 function addDays(d, n) {
   const x = new Date(d);
   x.setDate(x.getDate() + n);
@@ -18,7 +17,7 @@ function addDays(d, n) {
 
 export async function backfillSnapshotsFrom({
   userId,
-  fromDate,        // exit date or entry date depending on isExit
+  fromDate,
   newTrade,
   pAndL = 0,
   isExit = false,
@@ -27,8 +26,6 @@ export async function backfillSnapshotsFrom({
   console.log("📘 Trade:", newTrade, "💰 P&L:", pAndL, "🚪 isExit:", isExit);
 
   const ticker = newTrade.ticker;
-
-  // Establish absolute dates (using local time; change if you need ET-specific)
   const today = new Date();
   const todayISO = toIsoDate(today);
   const from = new Date(fromDate);
@@ -36,100 +33,130 @@ export async function backfillSnapshotsFrom({
   const yesterday = addDays(today, -1);
   const yesterdayISO = toIsoDate(yesterday);
 
-  // --- EXIT PATH (no price fetching) ----------------------------------------
+  // --- EXIT PATH ---
   if (isExit) {
-    // If the exit happened today, do nothing.
     if (fromISO === todayISO) {
-      console.log("✅ Exit is today; no snapshot changes needed.");
+      console.log("✅ Exit is today; no forward-day changes.");
       return;
     }
 
-    // If the exit happened before today:
-    // We must remove the position from the day AFTER exit through yesterday.
     const start = addDays(from, 1);
-    let cursor = new Date(start);
-
-    // If start > yesterday, nothing to do.
-    if (toIsoDate(cursor) > yesterdayISO) {
-      console.log("ℹ️ Exit is yesterday; nothing to roll forward.");
+    if (toIsoDate(start) > yesterdayISO) {
+      console.log("ℹ️ Exit was yesterday; no forward days to update.");
       return;
     }
 
+    const sharesSold = Math.abs(newTrade.shares);
+
+    let cursor = new Date(start);
     while (toIsoDate(cursor) <= yesterdayISO) {
       const dateStr = toIsoDate(cursor);
       const snapRef = doc(db, "users", userId, "dailySnapshots", dateStr);
       const snapDoc = await getDoc(snapRef);
 
       if (!snapDoc.exists()) {
-        // No snapshot for that day; nothing to remove.
+        await removeDividendFromUserDay(userId, dateStr, ticker, sharesSold);
         cursor = addDays(cursor, 1);
         continue;
       }
 
       const data = snapDoc.data() || {};
       const positions = { ...(data.positions || {}) };
+      const pos = positions[ticker];
 
-      if (!positions[ticker]) {
-        // Position already absent on this day; still ensure dividend cleanup
-        await removeDividendFromUserDay(userId, dateStr, ticker);
+      if (!pos) {
+        await removeDividendFromUserDay(userId, dateStr, ticker, sharesSold);
         cursor = addDays(cursor, 1);
         continue;
       }
 
-      // We will adjust totals by subtracting the saved per-position fields.
-      // This avoids fetching prices.
-      const pos = positions[ticker];
+      const originalShares = Number(pos.shares || 0);
+      const sharesForRemoval = Math.min(sharesSold, Math.abs(originalShares));
 
-      const posMarketValue = Number(pos.marketValue || 0);
-      const posCostBasis = Number(pos.costBasis || 0);
-      const posUnrealizedPL = Number(pos.unrealizedPL || 0);
+      // Adjust shares
+      let newShares;
+      if (newTrade.direction === "short") {
+        newShares = originalShares + sharesForRemoval;
+      } else {
+        newShares = originalShares - sharesForRemoval;
+      }
 
-      const newTotalMarketValue = Number(data.totalMarketValue || 0) - posMarketValue;
-      const newTotalCostBasis = Number(data.totalCostBasis || 0) - posCostBasis;
-      const newUnrealizedPL = Number(data.unrealizedPL || 0) - posUnrealizedPL;
+      // Scale MV and CB without fetching prices
+      const oldMV = Number(pos.marketValue || 0);
+      const oldCB = Number(pos.costBasis || 0);
+      const avgCostPerShare =
+        originalShares !== 0 ? oldCB / Math.abs(originalShares) : 0;
+      const usedSoldCost =
+        typeof newTrade.cost === "number" && !Number.isNaN(newTrade.cost)
+          ? newTrade.cost
+          : avgCostPerShare * sharesForRemoval;
+
+      const shareRatio =
+        originalShares !== 0 ? newShares / originalShares : 0;
+      const newMV = oldMV * shareRatio;
+      const newCB = oldCB - usedSoldCost;
+      const newUPL = newMV - newCB;
+
+      const deltaMV = newMV - oldMV;
+      const deltaCB = newCB - oldCB;
+      const deltaUPL = newUPL - (Number(pos.unrealizedPL || 0));
+
+      if (newShares === 0 || (newTrade.direction === "long" && newShares < 0) ||
+          (newTrade.direction === "short" && newShares > 0)) {
+        delete positions[ticker];
+      } else {
+        positions[ticker] = {
+          ...pos,
+          shares: newShares,
+          marketValue: newMV,
+          costBasis: newCB,
+          unrealizedPL: newUPL,
+        };
+      }
+
+      const newTotalMV = Number(data.totalMarketValue || 0) + deltaMV;
+      const newTotalCB = Number(data.totalCostBasis || 0) + deltaCB;
+      const newUPLTotal = Number(data.unrealizedPL || 0) + deltaUPL;
       const totalPLPercent =
-        newTotalCostBasis > 0 ? newUnrealizedPL / newTotalCostBasis : 0;
-
-      // Remove the position
-      delete positions[ticker];
+        newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
 
       await updateDoc(snapRef, {
         positions,
-        totalMarketValue: newTotalMarketValue,
-        totalCostBasis: newTotalCostBasis,
-        unrealizedPL: newUnrealizedPL,
+        totalMarketValue: newTotalMV,
+        totalCostBasis: newTotalCB,
+        unrealizedPL: newUPLTotal,
         totalPLPercent,
-        // cash stays the same for those days — proceeds are accounted on the exit date itself
-        // cumulative metrics remain unchanged for these carry-forward days
-        // Keep createdAt as-is
       });
 
-      // Remove any dividend entries for that ticker on this day.
-      await removeDividendFromUserDay(userId, dateStr, ticker);
+      await removeDividendFromUserDay(
+        userId,
+        dateStr,
+        ticker,
+        sharesForRemoval
+      );
 
       cursor = addDays(cursor, 1);
     }
 
-    // No refetch queue updates and no dividend additions for exit cleanups.
     console.log("✅ Exit backfill complete without price fetching.");
     return;
   }
 
-  // --- NON-EXIT PATH (existing behavior) ------------------------------------
-  // Build date list (inclusive of from..yesterday)
+  // --- NON-EXIT PATH (existing behavior) ---
   const allDates = [];
-  {
-    const start = new Date(from);
-    while (toIsoDate(start) <= yesterdayISO) {
-      allDates.push(toIsoDate(start));
-      start.setDate(start.getDate() + 1);
-    }
+  let cur = new Date(from);
+  while (toIsoDate(cur) <= yesterdayISO) {
+    allDates.push(toIsoDate(cur));
+    cur.setDate(cur.getDate() + 1);
   }
 
-  // Prices ONLY for non-exit flows
   const historicalPrices =
     allDates.length > 0
-      ? await fetchHistoricalPrices([ticker], allDates[0], allDates[allDates.length - 1])
+      ? await fetchHistoricalPrices(
+          [ticker],
+          allDates[0],
+          allDates[allDates.length - 1]
+        )
       : {};
 
   const refetchMap = {};
@@ -140,7 +167,13 @@ export async function backfillSnapshotsFrom({
     const snapRef = doc(db, "users", userId, "dailySnapshots", dateStr);
 
     const prevDate = addDays(dateCursor, -1);
-    const prevSnapRef = doc(db, "users", userId, "dailySnapshots", toIsoDate(prevDate));
+    const prevSnapRef = doc(
+      db,
+      "users",
+      userId,
+      "dailySnapshots",
+      toIsoDate(prevDate)
+    );
 
     const snapDoc = await getDoc(snapRef);
     let baseCash = 0;
@@ -171,39 +204,48 @@ export async function backfillSnapshotsFrom({
     const positions = structuredClone(basePositions);
     let updatedCash = baseCash;
 
-    // Non-exit: apply trade forward
     if (!positions[ticker]) {
       positions[ticker] = {
-        shares: newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
-        fifoStack: [{ shares: newTrade.shares, price: newTrade.averagePrice }],
+        shares:
+          newTrade.direction === "short"
+            ? -newTrade.shares
+            : newTrade.shares,
+        fifoStack: [
+          { shares: newTrade.shares, price: newTrade.averagePrice },
+        ],
       };
     } else {
       positions[ticker].shares +=
-        newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
-      positions[ticker].fifoStack = positions[ticker].fifoStack || [];
+        newTrade.direction === "short"
+          ? -newTrade.shares
+          : newTrade.shares;
       positions[ticker].fifoStack.push({
         shares: newTrade.shares,
         price: newTrade.averagePrice,
       });
     }
 
-    updatedCash += newTrade.direction === "short" ? newTrade.proceeds : -newTrade.cost;
+    updatedCash +=
+      newTrade.direction === "short"
+        ? newTrade.proceeds
+        : -newTrade.cost;
+
     cumulativeInvested += newTrade.averagePrice * newTrade.shares;
     cumulativeTrades += 1;
 
-    // Recompute totals using fetched prices
     let totalMarketValue = 0;
     let totalCostBasis = 0;
     let unrealizedPL = 0;
 
     for (const sym in positions) {
-      const price = historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0;
+      const price =
+        historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0;
       const pos = positions[sym];
-      const shares = Number(pos.shares || 0);
+      const shares = pos.shares;
       const fifoStack = pos.fifoStack || [];
 
       const costBasis = fifoStack.reduce(
-        (sum, lot) => sum + Number(lot.shares || 0) * Number(lot.price || 0),
+        (sum, lot) => sum + lot.shares * lot.price,
         0
       );
       const marketValue = shares * price;
@@ -225,7 +267,8 @@ export async function backfillSnapshotsFrom({
     }
 
     const totalAssets = totalMarketValue + updatedCash;
-    const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+    const totalPLPercent =
+      totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     await setDoc(snapRef, {
       date: dateStr,
@@ -243,11 +286,12 @@ export async function backfillSnapshotsFrom({
       createdAt: Timestamp.fromDate(new Date(dateStr)),
     });
 
-    // Dividend injection & updates (non-exit path)
     const existingTotalDiv = snapDoc.exists()
       ? snapDoc.data()?.totalDividendReceived ?? 0
       : 0;
-    const injectedDividend = historicalPrices?.[ticker]?.dividendMap?.[dateStr] ?? 0;
+
+    const injectedDividend =
+      historicalPrices?.[ticker]?.dividendMap?.[dateStr] ?? 0;
     const sharesHeld = positions?.[ticker]?.shares ?? 0;
     const addedDividendAmount = injectedDividend * sharesHeld;
 
@@ -257,11 +301,12 @@ export async function backfillSnapshotsFrom({
       });
     }
 
-    dateCursor = addDays(dateCursor, 1);
+    dateCursor.setDate(dateCursor.getDate() + 1);
   }
 
-  // ✅ Batch add dividends only for this ticker (non-exit)
-  const dividendMap = { [ticker]: historicalPrices?.[ticker]?.dividendMap ?? {} };
+  const dividendMap = {
+    [ticker]: historicalPrices?.[ticker]?.dividendMap ?? {},
+  };
 
   if (allDates.length > 0) {
     await checkAndAddDividendsToUser({
@@ -274,7 +319,6 @@ export async function backfillSnapshotsFrom({
     });
   }
 
-  // ✅ Update refetch queue (non-exit)
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   const userData = userSnap.data() || {};
@@ -286,5 +330,7 @@ export async function backfillSnapshotsFrom({
     newQueue[sym] = Array.from(new Set([...prevDates, ...dates]));
   }
 
-  await updateDoc(userRef, { refetchQueue: newQueue });
+  await updateDoc(userRef, {
+    refetchQueue: newQueue,
+  });
 }
