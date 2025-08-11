@@ -550,7 +550,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         });
       }
       invalidateLiveSnapshot(user.uid);
-        incrementRefresh();
+      incrementRefresh();
       setIsSubmitting(false); // ✅ done
     } catch (err) {
       setIsSubmitting(false);

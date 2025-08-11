@@ -4,6 +4,37 @@ import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { removeDividendFromUserDay } from "../dividends/removeDividendFromUserDay";
 
+function removeFromFifoStack(stack = [], sharesToRemove = 0, mode = "fifo") {
+  let remaining = Math.max(0, Number(sharesToRemove) || 0);
+  const next = Array.isArray(stack) ? stack.map((l) => ({ ...l })) : [];
+  let removedCost = 0;
+
+  // FIFO => oldest first (index 0); LIFO => newest first (last index)
+  const step = mode === "lifo" ? -1 : 1;
+  let i = mode === "lifo" ? next.length - 1 : 0;
+
+  while (remaining > 0 && next.length > 0 && i >= 0 && i < next.length) {
+    const lot = next[i] || {};
+    const lotShares = Math.max(0, Number(lot.shares) || 0);
+    const lotPrice = Number(lot.price) || 0;
+
+    if (lotShares <= remaining) {
+      removedCost += lotShares * lotPrice;
+      remaining -= lotShares;
+      next.splice(i, 1);
+      if (mode === "lifo") i -= 1; // list shrank
+      // fifo: i stays the same because current index now points to next item
+    } else {
+      // partial consume this lot
+      removedCost += remaining * lotPrice;
+      next[i] = { ...lot, shares: lotShares - remaining };
+      remaining = 0;
+    }
+  }
+
+  return { stack: next, removedCost };
+}
+
 function toIsoDate(d) {
   const z = new Date(d);
   z.setHours(0, 0, 0, 0);
@@ -35,12 +66,16 @@ export async function backfillSnapshotsFrom({
 
   // --- EXIT PATH ---
   if (isExit) {
+    // If exit is today, just stop — we don't backfill today in historical snapshots
     if (fromISO === todayISO) {
       console.log("✅ Exit is today; no forward-day changes.");
       return;
     }
 
-    const start = addDays(from, 1);
+    // Now we start on the actual exit date, not the day after
+    const start = new Date(from);
+
+    // If the exit date is after yesterday, nothing to forward update
     if (toIsoDate(start) > yesterdayISO) {
       console.log("ℹ️ Exit was yesterday; no forward days to update.");
       return;
@@ -73,7 +108,21 @@ export async function backfillSnapshotsFrom({
       const originalShares = Number(pos.shares || 0);
       const sharesForRemoval = Math.min(sharesSold, Math.abs(originalShares));
 
-      // Adjust shares
+      // --- NEW: update fifo stack and use its removed cost
+      let newFifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
+      let removedCostFromLots = 0;
+
+      // only adjust fifoStack for long positions that actually use it
+      if (newTrade.direction !== "short" && newFifoStack.length > 0) {
+        const { stack, removedCost } = removeFromFifoStack(
+          newFifoStack,
+          sharesForRemoval,
+          "fifo"
+        );
+        newFifoStack = stack;
+        removedCostFromLots = removedCost;
+      }
+
       let newShares;
       if (newTrade.direction === "short") {
         newShares = originalShares + sharesForRemoval;
@@ -81,28 +130,47 @@ export async function backfillSnapshotsFrom({
         newShares = originalShares - sharesForRemoval;
       }
 
-      // Scale MV and CB without fetching prices
+      // Scale MV without fetching prices
       const oldMV = Number(pos.marketValue || 0);
       const oldCB = Number(pos.costBasis || 0);
+
+      // prefer cost implied by lots; fall back to avg cost if lots missing
       const avgCostPerShare =
         originalShares !== 0 ? oldCB / Math.abs(originalShares) : 0;
       const usedSoldCost =
-        typeof newTrade.cost === "number" && !Number.isNaN(newTrade.cost)
+        removedCostFromLots > 0
+          ? removedCostFromLots
+          : typeof newTrade.cost === "number" && !Number.isNaN(newTrade.cost)
           ? newTrade.cost
           : avgCostPerShare * sharesForRemoval;
 
-      const shareRatio =
-        originalShares !== 0 ? newShares / originalShares : 0;
+      const shareRatio = originalShares !== 0 ? newShares / originalShares : 0;
       const newMV = oldMV * shareRatio;
-      const newCB = oldCB - usedSoldCost;
+
+      // If we consumed lots, recompute CB from the new fifo; else use oldCB - usedSoldCost
+      const recomputedCBFromStack = newFifoStack.reduce(
+        (sum, lot) =>
+          sum + (Number(lot.shares) || 0) * (Number(lot.price) || 0),
+        0
+      );
+      const newCB =
+        newTrade.direction !== "short" &&
+        pos.fifoStack &&
+        pos.fifoStack.length > 0
+          ? recomputedCBFromStack
+          : Math.max(0, oldCB - usedSoldCost);
+
       const newUPL = newMV - newCB;
 
       const deltaMV = newMV - oldMV;
       const deltaCB = newCB - oldCB;
-      const deltaUPL = newUPL - (Number(pos.unrealizedPL || 0));
+      const deltaUPL = newUPL - Number(pos.unrealizedPL || 0);
 
-      if (newShares === 0 || (newTrade.direction === "long" && newShares < 0) ||
-          (newTrade.direction === "short" && newShares > 0)) {
+      if (
+        newShares === 0 ||
+        (newTrade.direction === "long" && newShares < 0) ||
+        (newTrade.direction === "short" && newShares > 0)
+      ) {
         delete positions[ticker];
       } else {
         positions[ticker] = {
@@ -111,14 +179,16 @@ export async function backfillSnapshotsFrom({
           marketValue: newMV,
           costBasis: newCB,
           unrealizedPL: newUPL,
+          // --- NEW: persist the updated fifo stack when applicable
+          fifoStack:
+            newTrade.direction !== "short" ? newFifoStack : pos.fifoStack,
         };
       }
 
       const newTotalMV = Number(data.totalMarketValue || 0) + deltaMV;
       const newTotalCB = Number(data.totalCostBasis || 0) + deltaCB;
       const newUPLTotal = Number(data.unrealizedPL || 0) + deltaUPL;
-      const totalPLPercent =
-        newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
+      const totalPLPercent = newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
 
       await updateDoc(snapRef, {
         positions,
@@ -138,7 +208,9 @@ export async function backfillSnapshotsFrom({
       cursor = addDays(cursor, 1);
     }
 
-    console.log("✅ Exit backfill complete without price fetching.");
+    console.log(
+      "✅ Exit backfill complete without price fetching (including exit day)."
+    );
     return;
   }
 
@@ -207,18 +279,12 @@ export async function backfillSnapshotsFrom({
     if (!positions[ticker]) {
       positions[ticker] = {
         shares:
-          newTrade.direction === "short"
-            ? -newTrade.shares
-            : newTrade.shares,
-        fifoStack: [
-          { shares: newTrade.shares, price: newTrade.averagePrice },
-        ],
+          newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
+        fifoStack: [{ shares: newTrade.shares, price: newTrade.averagePrice }],
       };
     } else {
       positions[ticker].shares +=
-        newTrade.direction === "short"
-          ? -newTrade.shares
-          : newTrade.shares;
+        newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
       positions[ticker].fifoStack.push({
         shares: newTrade.shares,
         price: newTrade.averagePrice,
@@ -226,9 +292,7 @@ export async function backfillSnapshotsFrom({
     }
 
     updatedCash +=
-      newTrade.direction === "short"
-        ? newTrade.proceeds
-        : -newTrade.cost;
+      newTrade.direction === "short" ? newTrade.proceeds : -newTrade.cost;
 
     cumulativeInvested += newTrade.averagePrice * newTrade.shares;
     cumulativeTrades += 1;
@@ -238,8 +302,7 @@ export async function backfillSnapshotsFrom({
     let unrealizedPL = 0;
 
     for (const sym in positions) {
-      const price =
-        historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0;
+      const price = historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0;
       const pos = positions[sym];
       const shares = pos.shares;
       const fifoStack = pos.fifoStack || [];

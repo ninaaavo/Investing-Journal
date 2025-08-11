@@ -130,7 +130,9 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
   if (!user || !todaySnapshot) return "N/A";
 
   const yStr = yesterdayStrET();
+  const tStr = todayStrET();
 
+  // --- Load / fix yesterday snapshot (unchanged) ---
   let ySnap = null;
   try {
     const yRef = doc(db, "users", user.uid, "dailySnapshots", yStr);
@@ -141,6 +143,7 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
       const tickersWithZero = Object.entries(ySnap.positions)
         .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
         .map(([ticker]) => ticker);
+
       for (const ticker of tickersWithZero) {
         await lazyFixSnapshotPrice({ userId: user.uid, ticker, date: yStr });
       }
@@ -151,13 +154,25 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
     console.warn("Could not load/fix yesterday snapshot:", e);
   }
 
+  // --- Pull today's realized P/L from realizedPLByDate/{YYYY-MM-DD} ---
+  let realizedToday = 0;
+  try {
+    const rRef = doc(db, "users", user.uid, "realizedPLByDate", tStr);
+    const rDoc = await getDoc(rRef);
+    if (rDoc.exists()) {
+      const v = Number(rDoc.data()?.realizedPL ?? 0);
+      if (isFinite(v)) realizedToday = v;
+    }
+  } catch (e) {
+    console.warn("Could not load realizedPLByDate:", e);
+  }
+
+  // --- Unrealized intraday P/L on open positions (your logic) ---
   const todayPositions = todaySnapshot.positions || {};
   const yPositions = ySnap?.positions || {};
 
-  let totalPL = 0;
+  let totalUnrealized = 0;
   let totalCostToday = 0;
-
-  const tTodayStr = todayStrET();
 
   for (const ticker of Object.keys(todayPositions)) {
     const tPos = todayPositions[ticker] || {};
@@ -166,9 +181,8 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
 
     const todayUnitPrice = unitPriceFromPos(tPos, sharesToday);
 
-    // Determine “baseline” price for the day
     const openedToday =
-      (tPos.entryDate && String(tPos.entryDate) === tTodayStr) || false;
+      (tPos.entryDate && String(tPos.entryDate) === tStr) || false;
 
     let baselinePrice = 0;
 
@@ -190,10 +204,13 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
     }
 
     const plForTicker = (todayUnitPrice - baselinePrice) * sharesToday;
-    totalPL += plForTicker;
+    totalUnrealized += plForTicker;
 
     totalCostToday += Number(tPos.costBasis ?? 0);
   }
+
+  // --- Combine unrealized + realized for Day P/L ---
+  const totalPL = totalUnrealized + realizedToday;
 
   return formatPLAndPct(totalPL, totalCostToday);
 }
@@ -209,7 +226,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
 
   const uid = user.uid;
   const todayStr = todayStrET();
-  console.log('yoru today snapshot is', todaySnapshot)
+  console.log("yoru today snapshot is", todaySnapshot);
   const timeFrames = {
     "1D": 1,
     "1W": 7,
@@ -252,6 +269,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
     const pastUnrealized = Number(pastSnap?.unrealizedPL ?? 0);
     const denomPastCostBasis = Number(pastSnap?.totalCostBasis ?? 0);
     console.log("past snap is", pastSnap);
+
     // realized sum within (pastStr, todayStr]
     let realizedSum = 0;
     try {
