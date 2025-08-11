@@ -265,10 +265,10 @@ export async function getTotalPLBreakdown(todaySnapshot) {
     } catch (e) {
       console.warn(`Failed loading past snapshot ${pastStr}:`, e);
     }
-    console.log("im in day", days);
+    // console.log("im in day", days);
     const pastUnrealized = Number(pastSnap?.unrealizedPL ?? 0);
     const denomPastCostBasis = Number(pastSnap?.totalCostBasis ?? 0);
-    console.log("past snap is", pastSnap);
+    // console.log("past snap is", pastSnap);
 
     // realized sum within (pastStr, todayStr]
     let realizedSum = 0;
@@ -293,12 +293,12 @@ export async function getTotalPLBreakdown(todaySnapshot) {
       );
     }
 
-    console.log(
-      "today unrealized is",
-      todayUnrealized,
-      "past unrealized is",
-      pastUnrealized
-    );
+    // console.log(
+    //   "today unrealized is",
+    //   todayUnrealized,
+    //   "past unrealized is",
+    //   pastUnrealized
+    // );
 
     const totalPL = todayUnrealized - pastUnrealized + realizedSum;
     results[label] = formatPLAndPct(totalPL, denomPastCostBasis);

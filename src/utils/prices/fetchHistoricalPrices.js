@@ -32,7 +32,7 @@ function getDaysDiff(start, end) {
 
 // Main fetch function
 export default async function fetchHistoricalPrices(tickers, startDate, endDate) {
-  console.log("im fetching", tickers, "from", startDate, "to", endDate)
+  // console.log("im fetching", tickers, "from", startDate, "to", endDate)
   const result = {};
   const startDateStr = normalizeDateInput(startDate);
   const endDateStr = normalizeDateInput(endDate);
