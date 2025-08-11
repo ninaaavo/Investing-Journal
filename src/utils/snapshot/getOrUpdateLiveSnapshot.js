@@ -1,6 +1,16 @@
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDocFromServer, setDoc } from "firebase/firestore";
 import { db } from "../../firebase";
 import { calculateLiveSnapshot } from "./calculateLiveSnapshot";
+
+function todayKeyET() {
+  const dt = new Date(
+    new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York" }).format(new Date())
+  );
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 /**
  * Fetch or regenerate the live snapshot for today and save to Firestore.
@@ -8,19 +18,18 @@ import { calculateLiveSnapshot } from "./calculateLiveSnapshot";
  * @returns {Promise<Object>} - The live snapshot
  */
 export async function getOrUpdateLiveSnapshot(uid) {
-  const todayKey = new Date().toISOString().split("T")[0];
+  const todayKey = todayKeyET(); // use ET so we don't accidentally roll to next day at night
   const snapshotRef = doc(db, "users", uid, "liveSnapshot", "current");
 
   try {
-    const docSnap = await getDoc(snapshotRef);
+    // Force server read to avoid stale cached reads after deletes/updates
+    const docSnap = await getDocFromServer(snapshotRef);
     const existing = docSnap.exists() ? docSnap.data() : null;
 
-    // ✅ Return if today's snapshot already exists
     if (existing?.date === todayKey) {
       return existing;
     }
 
-    // ⏱ Generate new live snapshot
     const snapshot = await calculateLiveSnapshot();
 
     const fullSnapshot = {

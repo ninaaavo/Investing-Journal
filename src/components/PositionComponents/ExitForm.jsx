@@ -66,7 +66,7 @@ const EXIT_REASONS = [
 
 export default function ExitForm({ onSubmit, onClose, stock }) {
   const [error, setError] = useState("");
-  const { incrementRefresh, refreshSnapshot, forceLiveSnapshotNow  } = useUser();
+  const { incrementRefresh} = useUser();
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
@@ -549,7 +549,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
           leastReliableChecklistItem: leastReliable,
         });
       }
-      invalidateLiveSnapshot();
+      invalidateLiveSnapshot(user.uid);
       incrementRefresh();
       setIsSubmitting(false); // ✅ done
     } catch (err) {

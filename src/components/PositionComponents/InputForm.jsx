@@ -160,7 +160,7 @@ export default function InputForm() {
   };
 
   const [tickerDropdownOpen, setTickerDropdownOpen] = useState(false);
-  const { incrementRefresh } = useUser();
+  const { incrementRefresh, refreshSnapshot } = useUser();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -272,7 +272,7 @@ export default function InputForm() {
         "behaviorMetrics"
       );
       const behaviorSnap = await getDoc(behaviorRef);
-      console.log("behavior snap exist is", behaviorSnap.exists())
+      console.log("behavior snap exist is", behaviorSnap.exists());
 
       if (behaviorSnap.exists()) {
         const behaviorData = behaviorSnap.data();
@@ -287,12 +287,11 @@ export default function InputForm() {
         };
 
         // Increment checklist item counts
-        console.log("your check list is", form.checklist)
+        console.log("your check list is", form.checklist);
         Object.entries(form.checklist).forEach(([item, obj]) => {
-          console.log("item is", item, "obj is", obj)
-          
+          console.log("item is", item, "obj is", obj);
+
           newChecklistCounts[item] = (newChecklistCounts[item] ?? 0) + 1;
-          
         });
 
         // Determine new most used checklist item
@@ -304,7 +303,10 @@ export default function InputForm() {
             topChecklistItem = item;
           }
         }
-        console.log("your new checklist count to be updated is", newChecklistCounts)
+        console.log(
+          "your new checklist count to be updated is",
+          newChecklistCounts
+        );
         await updateDoc(behaviorRef, {
           journalEntryCount: newJournalCount,
           totalConfidenceScore: newConfidenceTotal,
@@ -453,7 +455,7 @@ export default function InputForm() {
             entryTimestamp: form.entryTimestamp,
           },
           tradeCost: form.direction === "long" ? tradeCost : 0,
-          isExit: false
+          isExit: false,
         };
 
         // Case 1: update firstSnapshotDate if earlier
@@ -471,8 +473,6 @@ export default function InputForm() {
         backfillSnapshotsFrom(tradeDetails).catch((err) =>
           console.error("❌ Backfill failed in background:", err)
         );
-        invalidateLiveSnapshot();
-        incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
       }
 
       setShowExpandedForm(false);
@@ -514,6 +514,10 @@ export default function InputForm() {
         theme: "colored",
       });
       setIsSubmitting(false);
+      console.log("input form calling invalidate snapshot");
+      invalidateLiveSnapshot(user.uid);
+      // refreshSnapshot()
+      incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
     } catch (error) {
       setIsSubmitting(false);
 
