@@ -66,7 +66,7 @@ export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
     totalPL += p.unrealizedPL ?? 0;
   }
 
-  const totalAssets = totalMarketValue + (data.cash ?? 0);
+  const totalAssets = totalMarketValue ;
   const totalPLPercent = totalCostBasis > 0 ? totalPL / totalCostBasis : 0;
 
   await updateDoc(snapRef, {

@@ -83,7 +83,7 @@ export default async function generateSnapshotRange({
       simplifiedPositions[tk] = shares;
     }
 
-    const totalAssets = totalMarketValue + safeParse(currentSnapshot.cash);
+    const totalAssets = totalMarketValue;
     const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     // Build or take dividend map for this day
@@ -109,7 +109,6 @@ export default async function generateSnapshotRange({
 
     const snapshot = {
       date: dateStr,
-      cash: safeParse(currentSnapshot.cash),
       invested: totalMarketValue,
       totalAssets,
       netContribution: safeParse(currentSnapshot.netContribution),

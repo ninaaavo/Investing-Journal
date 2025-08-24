@@ -50,7 +50,6 @@ export async function calculateLiveSnapshot() {
   const financialSnap = await getDocFromServer(financialRef);
   const financialData = financialSnap.exists() ? financialSnap.data() : {};
 
-  const cash = safeParse(financialData.cash);
   const netContribution = safeParse(financialData.netContribution);
 
   let totalMarketValue = 0;
@@ -100,7 +99,7 @@ export async function calculateLiveSnapshot() {
     };
   }
 
-  const totalAssets = totalMarketValue + cash;
+  const totalAssets = totalMarketValue;
   const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
   // ✅ Get totalDividendReceived from yesterday’s snapshot (ET‑correct)
@@ -117,7 +116,6 @@ export async function calculateLiveSnapshot() {
   }
 
   return {
-    cash,
     invested: totalMarketValue,
     totalAssets,
     netContribution,

@@ -41,7 +41,7 @@ export default async function getOrGenerateSnapshot(dateStr) {
   );
   const prevSnapDocs = await getDocs(q);
 
-  let baseSnapshot = { totalAssets: 0, cash: 0, invested: 0, netContribution: 0, positions: {} };
+  let baseSnapshot = { totalAssets: 0, invested: 0, netContribution: 0, positions: {} };
   let startDateStr = dateStr;
 
   if (!prevSnapDocs.empty) {

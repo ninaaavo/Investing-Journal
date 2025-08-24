@@ -18,7 +18,6 @@ export async function initializeFirstData(userId) {
     totalMarketValue: 0,
     unrealizedPL: 0,
     totalPLPercent: 0,
-    cash: 0,
     totalAssets: 0,
     netContribution: 0,
     positions: {},

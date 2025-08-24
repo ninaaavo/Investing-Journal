@@ -405,11 +405,6 @@ export default function InputForm() {
       const firstDayInDb = userSnap.data()?.firstSnapshotDate;
       const tradeCost = Number(form.shares) * Number(form.entryPrice);
 
-      if (form.direction === "long") {
-        const prevCash = userSnap.data()?.cash ?? 0;
-        const newCash = prevCash - tradeCost;
-        await updateDoc(userRef, { cash: newCash });
-      }
       // Only trigger snapshot logic if date is before today
       if (entryDateObj < today) {
         console.log("im in pre backfill");

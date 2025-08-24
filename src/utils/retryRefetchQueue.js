@@ -49,7 +49,7 @@ export async function retryRefetchQueue(userId) {
             snapData.totalMarketValue = totalMarketValue;
             snapData.totalCostBasis = totalCostBasis;
             snapData.unrealizedPL = totalPL;
-            snapData.totalAssets = totalMarketValue + (snapData.cash ?? 0);
+            snapData.totalAssets = totalMarketValue;
             snapData.totalPLPercent =
               totalCostBasis > 0 ? totalPL / totalCostBasis : 0;
 

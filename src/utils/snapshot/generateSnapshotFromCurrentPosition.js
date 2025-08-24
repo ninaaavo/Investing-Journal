@@ -96,7 +96,6 @@ export default async function generateSnapshotFromCurrentPosition({
   let totalMarketValue = 0;
   let totalCostBasis = 0;
   let unrealizedPL = 0;
-  let cash = 0; // If you keep cash separately, read it and pass in here.
 
   const enrichedPositions = {};
   const simplifiedPositions = {}; // {ticker: shares} for dividend calc
@@ -132,7 +131,7 @@ export default async function generateSnapshotFromCurrentPosition({
     simplifiedPositions[tk] = shares;
   }
 
-  const totalAssets = totalMarketValue + cash;
+  const totalAssets = totalMarketValue;
   const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
   // ---------- (2) Compute T-1 dividends (no writes to DB yet) ----------
@@ -167,7 +166,6 @@ export default async function generateSnapshotFromCurrentPosition({
   // ---------- Build snapshot object ----------
   const snapshot = {
     date: dateStr,
-    cash,
     invested: totalMarketValue,
     totalAssets,
     netContribution: 0,

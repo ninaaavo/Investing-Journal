@@ -248,7 +248,6 @@ export async function backfillSnapshotsFrom({
     );
 
     const snapDoc = await getDoc(snapRef);
-    let baseCash = 0;
     let basePositions = {};
     let cumulativeTrades = 0;
     let cumulativeInvested = 0;
@@ -256,7 +255,6 @@ export async function backfillSnapshotsFrom({
 
     if (snapDoc.exists()) {
       const data = snapDoc.data();
-      baseCash = data.cash ?? 0;
       basePositions = structuredClone(data.positions ?? {});
       cumulativeTrades = data.cumulativeTrades ?? 0;
       cumulativeInvested = data.cumulativeInvested ?? 0;
@@ -265,7 +263,6 @@ export async function backfillSnapshotsFrom({
       const prevSnapDoc = await getDoc(prevSnapRef);
       if (prevSnapDoc.exists()) {
         const prevData = prevSnapDoc.data();
-        baseCash = prevData.cash ?? 0;
         basePositions = structuredClone(prevData.positions ?? {});
         cumulativeTrades = prevData.cumulativeTrades ?? 0;
         cumulativeInvested = prevData.cumulativeInvested ?? 0;
@@ -274,7 +271,6 @@ export async function backfillSnapshotsFrom({
     }
 
     const positions = structuredClone(basePositions);
-    let updatedCash = baseCash;
 
     if (!positions[ticker]) {
       positions[ticker] = {
@@ -291,9 +287,7 @@ export async function backfillSnapshotsFrom({
       });
     }
 
-    updatedCash +=
-      newTrade.direction === "short" ? newTrade.proceeds : -newTrade.cost;
-
+    
     cumulativeInvested += newTrade.averagePrice * newTrade.shares;
     cumulativeTrades += 1;
 
@@ -329,13 +323,12 @@ export async function backfillSnapshotsFrom({
       }
     }
 
-    const totalAssets = totalMarketValue + updatedCash;
+    const totalAssets = totalMarketValue ;
     const totalPLPercent =
       totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
     await setDoc(snapRef, {
       date: dateStr,
-      cash: updatedCash,
       totalAssets,
       totalCostBasis,
       totalMarketValue,

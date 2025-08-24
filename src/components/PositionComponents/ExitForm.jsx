@@ -380,13 +380,8 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
       }
 
       if (onSubmit) onSubmit(exitJournal);
-      // === Update user's cash ===
       const userRef = doc(db, "users", user.uid);
       const userSnap = await getDoc(userRef);
-      const prevCash = userSnap.data()?.cash ?? 0;
-      const cashFromSale = exitPrice * exitShares;
-      const newCash = prevCash + cashFromSale;
-      await updateDoc(userRef, { cash: newCash });
 
       // === Backfill snapshots if the exit is backdated ===
       if (exitDateObj < today) {

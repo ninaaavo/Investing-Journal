@@ -44,9 +44,8 @@ export default async function generateSnapshot({
 
   console.log("Your price map is", priceMap);
 
-  const cash = safeParse(baseSnapshot?.cash);
   const netContribution = safeParse(baseSnapshot?.netContribution);
-  const prevPositions = baseSnapshot?.positions || {};
+  // const prevPositions = baseSnapshot?.positions || {};
 
   let totalMarketValue = 0;
   let totalCostBasis = 0;
@@ -79,7 +78,7 @@ export default async function generateSnapshot({
     };
   }
 
-  const totalAssets = totalMarketValue + cash;
+  const totalAssets = totalMarketValue;
   const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
 
   // ✅ Inject dividendMap directly to avoid double-fetching
@@ -92,7 +91,6 @@ export default async function generateSnapshot({
   });
 
   return {
-    cash,
     invested: totalMarketValue,
     totalAssets,
     netContribution,
