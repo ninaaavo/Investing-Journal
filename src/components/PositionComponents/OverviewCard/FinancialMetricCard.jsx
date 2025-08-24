@@ -8,11 +8,14 @@ import {
   getDayPLFromSnapshots,
   getTotalPLBreakdown,
 } from "../../../utils/getPLValuesFromSnapshots.js";
+import { getDividendBreakdown } from "../../../utils/dividends/getDividendValuesFromSnapshots.js";
 
 const FinancialMetricCard = () => {
   const { todaySnapshot, refreshTrigger } = useUser();
 
-  const [dividendRange, setDividendRange] = useState("YTD");
+  const [dividendRange, setDividendRange] = useState("1D"); // <- options below match this
+  const [dividendMap, setDividendMap] = useState(null);     // { "1D": "$…", … }
+
   const [openPL, setOpenPL] = useState(null);
   const [dayPL, setDayPL] = useState(null);
   const [totalPLMap, setTotalPLMap] = useState(null); // { "1D": "...", ... }
@@ -34,19 +37,22 @@ const FinancialMetricCard = () => {
 
     (async () => {
       try {
-        const [openStr, dayStr, totalMap] = await Promise.all([
+        const [openStr, dayStr, totalMap, divMap] = await Promise.all([
           getOpenPLFromSnapshot(todaySnapshot),
           getDayPLFromSnapshots(todaySnapshot),
           getTotalPLBreakdown(todaySnapshot),
+          getDividendBreakdown(todaySnapshot),
         ]);
         setOpenPL(openStr);
         setDayPL(dayStr);
         setTotalPLMap(totalMap || {});
+        setDividendMap(divMap || {});
       } catch (e) {
-        console.error("Failed to compute P/L:", e);
+        console.error("Failed to compute metrics:", e);
         setOpenPL("N/A");
         setDayPL("N/A");
         setTotalPLMap({});
+        setDividendMap({});
       }
     })();
 
@@ -55,11 +61,6 @@ const FinancialMetricCard = () => {
 
   const costBasis = todaySnapshot?.totalCostBasis ?? 0;
   const totalAssets = todaySnapshot?.totalAssets ?? 0;
-
-  const dividendValues = {
-    YTD: "$432.75",
-    "All Time": "$1,123.88",
-  };
 
   const financialFields = useMemo(
     () => [
@@ -99,11 +100,15 @@ const FinancialMetricCard = () => {
       {
         label: "Dividend",
         type: "dropdown",
-        options: ["YTD", "All Time"],
+        options: ["1D", "1W", "1M", "3M", "1Y", "All"],
         selected: dividendRange,
         onChange: (value) => setDividendRange(value),
-        baseValue: isLoading ? "Loading..." : dividendValues[dividendRange],
-        info: "Track how much income your investments generate over time.",
+        baseValue:
+          isLoading || !dividendMap
+            ? "Loading..."
+            : dividendMap[dividendRange] ?? "N/A",
+        info:
+          "Cumulative dividends earned over the selected window, derived from snapshot totals (no double-counting).",
       },
       {
         label: "Avg Holding Duration",
@@ -127,6 +132,7 @@ const FinancialMetricCard = () => {
       dayPL,
       totalPLMap,
       totalPLRange,
+      dividendMap,
       dividendRange,
       costBasis,
       totalAssets,
