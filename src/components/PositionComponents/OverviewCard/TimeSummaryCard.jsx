@@ -34,7 +34,7 @@ const TimeSummaryCard = () => {
       const todayRef = doc(db, "users", user.uid, "dailySnapshots", todayKey);
       const todaySnap = await getDoc(todayRef);
       const todayData = todaySnap.exists() ? todaySnap.data() : {};
-
+      
       if (selectedTimeframe === "All time") {
         setSummary({
           trades: todayData.cumulativeTrades ?? 0,

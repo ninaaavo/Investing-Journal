@@ -1,14 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import MiniHoverCard from "./MiniHoverCard";
 import { useNavigate } from "react-router-dom";
+import StockPriceChart from "./StockPriceChart"; // <-- adjust path if needed
 
 const API_KEY = import.meta.env.VITE_FINNHUB_API_KEY;
+
+/** Firestore Timestamp or Date -> "YYYY-MM-DD" in Eastern Time */
+function toETDateOnly(input) {
+  const d = input?.toDate ? input.toDate() : new Date(input);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(d);
+}
 
 export default function EntryJournalSummary({ selected }) {
   const shares = parseFloat(selected.shares);
   const sharesSold = parseFloat(selected.totalSharesSold) || 0;
   const entryPrice = parseFloat(selected.entryPrice);
-  const avgSoldPrice = parseFloat(selected.averageSoldPrice);
+  const avgSoldPrice = parseFloat(selected.averageSoldPrice || 0);
   const timestamp = selected.entryTimestamp || selected.exitTimestamp;
   const direction = selected.direction?.toLowerCase() || "long";
 
@@ -21,47 +28,68 @@ export default function EntryJournalSummary({ selected }) {
   );
   const navigate = useNavigate();
 
+  // --- live price (Finnhub) ---
   useEffect(() => {
     if (!selected.ticker) return;
-
     const fetchPrice = async () => {
       try {
         const res = await fetch(
           `https://finnhub.io/api/v1/quote?symbol=${selected.ticker}&token=${API_KEY}`
         );
         const data = await res.json();
-        if (data.c) setCurrentPrice(data.c);
+        if (data.c) setCurrentPrice(Number(data.c));
       } catch (err) {
         console.error("Failed to fetch real-time price", err);
       }
     };
-
     fetchPrice();
   }, [selected.ticker]);
 
+  // --- hover card anchors ---
   const handleMouseEnter = () => {
     clearTimeout(hoverTimeoutRef.current);
     const rect = hoverRef.current?.getBoundingClientRect();
     setHoverAnchor(rect);
     setShowHoverCard(true);
   };
-
   const handleMouseLeave = () => {
-    hoverTimeoutRef.current = setTimeout(() => {
-      setShowHoverCard(false);
-    }, 150);
+    hoverTimeoutRef.current = setTimeout(() => setShowHoverCard(false), 150);
   };
 
+  // --- basic P/L calcs (unchanged) ---
   const sharesHeld = shares - sharesSold;
   const unrealizedGain = currentPrice
     ? (currentPrice - entryPrice) * sharesHeld * (direction === "short" ? -1 : 1)
     : 0;
-  const unrealizedPercent = sharesHeld === 0 ? 0 : currentPrice
-    ? ((currentPrice - entryPrice) / entryPrice) * 100 * (direction === "short" ? -1 : 1)
-    : 0;
+  const unrealizedPercent =
+    sharesHeld === 0
+      ? 0
+      : currentPrice
+      ? ((currentPrice - entryPrice) / entryPrice) * 100 * (direction === "short" ? -1 : 1)
+      : 0;
 
-  const realizedGain = (avgSoldPrice - entryPrice) * sharesSold * (direction === "short" ? -1 : 1);
+  const realizedGain =
+    (avgSoldPrice - entryPrice) * sharesSold * (direction === "short" ? -1 : 1);
   const isGain = unrealizedGain >= 0;
+
+  // --- chart props: entry / exit dates + events ---
+  const entryDateISO = useMemo(() => {
+    if (!selected.entryTimestamp) return undefined;
+    return toETDateOnly(selected.entryTimestamp);
+  }, [selected.entryTimestamp]);
+
+  const finalExitEvent = useMemo(() => {
+    const arr = Array.isArray(selected.exitEvents) ? selected.exitEvents : [];
+    if (!arr.length) return null;
+    return arr[arr.length - 1];
+  }, [selected.exitEvents]);
+
+  // If the trade is fully closed, cap the chart at the last exit date; otherwise leave undefined
+  const exitDateISO = useMemo(() => {
+    const fullyClosed = sharesSold >= shares && shares > 0;
+    if (!fullyClosed || !finalExitEvent?.exitTimestamp) return undefined;
+    return toETDateOnly(finalExitEvent.exitTimestamp);
+  }, [sharesSold, shares, finalExitEvent]);
 
   return (
     <div className="relative bg-[var(--color-background)] p-8 mt-4 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] w-[calc(66%)]">
@@ -86,7 +114,8 @@ export default function EntryJournalSummary({ selected }) {
 
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-primary">
-          {selected.ticker} <span className="font-normal pb-1">({selected.companyName})</span>
+          {selected.ticker}{" "}
+          <span className="font-normal pb-1">({selected.companyName})</span>
         </h2>
         <p className="text-sm text-[var(--color-text)]">
           {(() => {
@@ -94,7 +123,6 @@ export default function EntryJournalSummary({ selected }) {
             const month = String(dateObj.getMonth() + 1).padStart(2, "0");
             const day = String(dateObj.getDate()).padStart(2, "0");
             const year = String(dateObj.getFullYear()).slice(-2);
-
             if (!selected.timeProvided) {
               return `${month}/${day}/${year}`;
             } else {
@@ -128,12 +156,15 @@ export default function EntryJournalSummary({ selected }) {
           </p>
         </div>
 
-        <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <div
+          className="relative inline-block"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
           <div ref={hoverRef} className="cursor-pointer pt-0.2">
             <p className="font-medium">Shares Closed:</p>
             <span className="underline ">{sharesSold}</span>
           </div>
-
           {showHoverCard && selected.exitEvents && (
             <MiniHoverCard
               show={showHoverCard}
@@ -155,7 +186,7 @@ export default function EntryJournalSummary({ selected }) {
           </p>
           <p className={realizedGain >= 0 ? "text-green-600" : "text-red-500"}>
             ${realizedGain.toFixed(2)} (
-            {((realizedGain / (entryPrice * sharesSold || 1)) * 100).toFixed(1)}%)
+            {((realizedGain / (entryPrice * (sharesSold || 1))) * 100).toFixed(1)}%)
           </p>
         </div>
         <div>
@@ -174,8 +205,16 @@ export default function EntryJournalSummary({ selected }) {
         </div>
       </div>
 
-      <div className="bg-gray-100 h-48 rounded-md flex items-center justify-center text-gray-400 text-sm">
-        📈 [Stock Chart Placeholder]
+      {/* === REAL CHART === */}
+      <div className="rounded-md overflow-hidden">
+        <StockPriceChart
+          ticker={selected.ticker}
+          entryDateISO={entryDateISO}
+          exitDateISO={exitDateISO}          // omit if still open
+          exitEvents={selected.exitEvents || []}
+          showEntryDot
+          height={260}
+        />
       </div>
     </div>
   );
