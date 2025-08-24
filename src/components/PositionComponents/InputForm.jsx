@@ -296,9 +296,11 @@ export default function InputForm() {
 
         // Determine new most used checklist item
         let topChecklistItem = behaviorData.mostUsedChecklistItem || "";
-        let maxCount = newChecklistCounts[topChecklistItem];
+        let maxCount = newChecklistCounts[topChecklistItem]??0;
+        console.log("ur max count is", maxCount)
         for (const [item, count] of Object.entries(newChecklistCounts)) {
           if (count > maxCount) {
+            console.log("ur top item is", item)
             maxCount = count;
             topChecklistItem = item;
           }
