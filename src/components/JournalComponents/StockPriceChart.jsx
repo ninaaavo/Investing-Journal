@@ -15,18 +15,22 @@ import { toETDateOnly } from "../../utils/toETDateOnly";
 
 /**
  * Props:
- *  - ticker (string, required)
- *  - entryDateISO (YYYY-MM-DD, required)
- *  - exitDateISO  (YYYY-MM-DD, optional)
- *  - exitEvents   (array, optional) // [{ exitTimestamp, sharesSold, soldPrice }]
- *  - showEntryDot (bool, default true)
- *  - height       (number, default 240)
+ *  - ticker         (string, required)
+ *  - entryDateISO   (YYYY-MM-DD, required)   // first buy date
+ *  - exitDateISO    (YYYY-MM-DD, optional)   // sell date (required if variant="exit")
+ *  - exitEvents     (array, optional)        // [{ exitTimestamp, sharesSold, soldPrice }]
+ *  - entryEvents    (array, optional)        // [{ entryTimestamp, sharesUsed|shares, entryPrice }]
+ *  - variant        ("entry" | "exit", default "entry")
+ *  - showEntryDot   (bool, default true)     // highlight first entry date's close
+ *  - height         (number, default 240)
  */
 export default function StockPriceChart({
   ticker,
   entryDateISO,
   exitDateISO,
   exitEvents = [],
+  entryEvents = [],
+  variant = "entry",
   showEntryDot = true,
   height = 240,
 }) {
@@ -35,26 +39,39 @@ export default function StockPriceChart({
   const [series, setSeries] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Normalize sell events to ET dates & numbers
+  // Normalize EXIT sells for entry-mode dots (if used)
   const normalizedSells = useMemo(() => {
     return (exitEvents || []).map((e) => ({
       date: toETDateOnly(e.exitTimestamp),
-      sharesSold: Number(e.sharesSold ?? 0),
-      soldPrice: Number(e.soldPrice ?? 0),
+      shares: Number(e.sharesSold ?? 0),
+      price: Number(e.soldPrice ?? 0),
+      kind: "sell",
     }));
   }, [exitEvents]);
 
-  // Fetch price series spanning entry -> (optional) exit
+  // Normalize ENTRY buys for exit-mode dots
+  const normalizedBuys = useMemo(() => {
+    return (entryEvents || []).map((e) => ({
+      date: toETDateOnly(e.entryTimestamp),
+      shares: Number(e.sharesUsed ?? e.shares ?? 0),
+      price: Number(e.entryPrice ?? 0),
+      kind: "buy",
+    }));
+  }, [entryEvents]);
+
+  // Fetch price series across the correct window
   useEffect(() => {
     let alive = true;
     async function run() {
       if (!user?.uid || !ticker || !entryDateISO) return;
+      if (variant === "exit" && !exitDateISO) return;
+
       setLoading(true);
       const s = await fetchTickerPriceSeries({
         uid: user.uid,
         ticker,
         startDateISO: entryDateISO,
-        endDateISO: exitDateISO || null,
+        endDateISO: variant === "exit" ? exitDateISO : (exitDateISO || null),
       });
       if (alive) {
         setSeries(s);
@@ -65,7 +82,7 @@ export default function StockPriceChart({
     return () => {
       alive = false;
     };
-  }, [user?.uid, ticker, entryDateISO, exitDateISO]);
+  }, [user?.uid, ticker, entryDateISO, exitDateISO, variant]);
 
   // Lookups
   const seriesByDate = useMemo(() => {
@@ -74,41 +91,54 @@ export default function StockPriceChart({
     return m;
   }, [series]);
 
-  const entryY = useMemo(() => seriesByDate.get(entryDateISO)?.close, [seriesByDate, entryDateISO]);
+  const entryY = useMemo(
+    () => (seriesByDate.has(entryDateISO) ? seriesByDate.get(entryDateISO).close : undefined),
+    [seriesByDate, entryDateISO]
+  );
 
-  // Only keep sell events whose dates exist in the X domain (series)
-  const sellRefs = useMemo(() => {
+  // Choose which events to plot as dots
+  const rawEventsForDots = variant === "exit" ? normalizedBuys : normalizedSells;
+
+  // Keep only those events that fall on dates present in the series
+  const eventDots = useMemo(() => {
     if (!series) return [];
-    return normalizedSells.filter((ev) => seriesByDate.has(ev.date));
-  }, [normalizedSells, series, seriesByDate]);
+    return rawEventsForDots.filter((ev) => seriesByDate.has(ev.date));
+  }, [rawEventsForDots, series, seriesByDate]);
 
   if (!ticker || !entryDateISO) return <Placeholder>Missing ticker/entry date</Placeholder>;
+  if (variant === "exit" && !exitDateISO)
+    return <Placeholder>Missing sell date for exit chart</Placeholder>;
   if (loading || !series) return <Placeholder>Loading chart…</Placeholder>;
   if (series.length === 0) return <Placeholder>No price data found for {ticker}</Placeholder>;
 
+  const tooltipMode = variant === "exit" ? "buy" : "sell";
+  const title = variant === "exit" ? "Exit Price Chart" : "Entry Price Chart";
+console.log("im loading stock price, w events " + series)
   return (
     <div className="w-full rounded-xl border bg-white">
+      <div className="px-3 pt-2 text-sm text-gray-600">{title}</div>
       <div style={{ width: "100%", height }}>
         <ResponsiveContainer>
           <LineChart data={series} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={24} />
             <YAxis tick={{ fontSize: 11 }} width={56} domain={["auto", "auto"]} />
-            <Tooltip content={<ChartTooltip sells={sellRefs} />} />
+            <Tooltip content={<ChartTooltip mode={tooltipMode} events={eventDots} />} />
+
             {/* PRICE LINE (close) */}
             <Line type="monotone" dataKey="close" dot={false} strokeWidth={2} name="Close" />
 
-            {/* ENTRY DOT (optional) at entry date's close */}
+            {/* ENTRY DOT (optional) at first entry date's close */}
             {showEntryDot && typeof entryY === "number" && (
               <ReferenceDot x={entryDateISO} y={entryY} r={4} isFront />
             )}
 
-            {/* SELL DOTS at exact sold price on sell date(s) */}
-            {sellRefs.map((ev, i) => (
+            {/* EVENT DOTS */}
+            {eventDots.map((ev, i) => (
               <ReferenceDot
-                key={`${ev.date}-${i}`}
-                x={ev.date}               // categorical X matches series date
-                y={ev.soldPrice}          // exact sold price (e.g., 333)
+                key={`${ev.kind}-${ev.date}-${i}`}
+                x={ev.date}
+                y={ev.price}
                 r={4}
                 isFront
                 fill="currentColor"
@@ -131,25 +161,25 @@ function Placeholder({ children }) {
   );
 }
 
-/** Tooltip shows close and any sells on the hovered date */
-function ChartTooltip({ active, payload, label, sells }) {
+/** Tooltip shows close and BUY/SELL events on the hovered date */
+function ChartTooltip({ active, payload, label, events, mode }) {
   if (!active || !payload || payload.length === 0) return null;
 
   const closeRow = payload.find((p) => p.name === "Close");
   const closeVal = closeRow ? Number(closeRow.value) : null;
 
-  const sellsToday = (sells || []).filter((s) => s.date === label);
+  const eventsToday = (events || []).filter((e) => e.date === label);
+  const verb = mode === "buy" ? "Buy" : "Sell";
 
   return (
     <div className="rounded-lg border bg-white p-2 text-xs shadow">
       <div className="font-medium mb-1">Date: {label}</div>
       {closeVal != null && <div>Close: ${closeVal.toFixed(2)}</div>}
-      {sellsToday.length > 0 && (
+      {eventsToday.length > 0 && (
         <div className="mt-1 space-y-1">
-          {sellsToday.map((e, idx) => (
+          {eventsToday.map((e, idx) => (
             <div key={idx}>
-              Sell {e.sharesSold} {e.sharesSold === 1 ? "share" : "shares"} @ $
-              {Number(e.soldPrice).toFixed(2)}
+              {verb} {e.shares} {e.shares === 1 ? "share" : "shares"} @ ${Number(e.price).toFixed(2)}
             </div>
           ))}
         </div>
