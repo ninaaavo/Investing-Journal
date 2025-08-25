@@ -20,7 +20,7 @@ import FinancialMetricsCard from "./FinancialMetricCard.jsx";
 import BehavioralMetricsCard from "./BehavioralMetricCard.jsx";
 import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
 import PerformanceInsightsCard from "./PerformanceInsightCard.jsx";
-import TimeSummaryCard from "./TimeSummaryCard.jsx";
+// import TimeSummaryCard from "./TimeSummaryCard.jsx";
 import NotesCard from "./NotesCard.jsx";
 
 const componentMap = {
@@ -28,7 +28,6 @@ const componentMap = {
   BehavioralMetricsCard,
   SectorBreakdownChart,
   PerformanceInsightsCard,
-  TimeSummaryCard,
   NotesCard,
 };
 
@@ -36,11 +35,10 @@ export default function OverviewCard({ isEditingLayout }) {
   const [leftColumn, setLeftColumn] = useState([
     "FinancialMetricsCard",
     "BehavioralMetricsCard",
-    "SectorBreakdownChart",
   ]);
   const [rightColumn, setRightColumn] = useState([
     "PerformanceInsightsCard",
-    "TimeSummaryCard",
+    "SectorBreakdownChart",
     "NotesCard",
   ]);
 
@@ -89,10 +87,12 @@ export default function OverviewCard({ isEditingLayout }) {
 
             if (!activeCol || !overCol) return;
 
-            const from = activeCol === "left" ? [...leftColumn] : [...rightColumn];
+            const from =
+              activeCol === "left" ? [...leftColumn] : [...rightColumn];
             const to = overCol === "left" ? [...leftColumn] : [...rightColumn];
 
-            const setFrom = activeCol === "left" ? setLeftColumn : setRightColumn;
+            const setFrom =
+              activeCol === "left" ? setLeftColumn : setRightColumn;
             const setTo = overCol === "left" ? setLeftColumn : setRightColumn;
 
             const fromIndex = from.indexOf(activeId);
@@ -105,7 +105,11 @@ export default function OverviewCard({ isEditingLayout }) {
               const newTo =
                 overIndex === -1
                   ? [...to, activeId]
-                  : [...to.slice(0, overIndex), activeId, ...to.slice(overIndex)];
+                  : [
+                      ...to.slice(0, overIndex),
+                      activeId,
+                      ...to.slice(overIndex),
+                    ];
               setFrom(newFrom);
               setTo(newTo);
             }
