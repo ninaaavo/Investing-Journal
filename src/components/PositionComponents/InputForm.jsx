@@ -177,22 +177,26 @@ export default function InputForm() {
 
     const userRef = doc(db, "users", user.uid);
     const userSnap = await getDoc(userRef);
-
     if (!userSnap.exists()) {
       console.error("User doc not found");
       return;
     }
 
     try {
-      // 🆕 Set journalType based on direction
-      const adjustedJournalType = form.direction === "short" ? "sell" : "buy";
+      const isShort = (form.direction || "").toLowerCase() === "short";
+
+      // 🆕 Set journalType based on direction (short entry = "sell")
+      const adjustedJournalType = isShort ? "sell" : "buy";
       const entryPrice = parseFloat(form.entryPrice);
       const stopLossPrice = parseFloat(form.stopLoss);
 
+      // Risk %: longs use (SL - entry)/entry, shorts use (entry - SL)/entry
       let lossPercent = null;
       if (!isNaN(entryPrice) && !isNaN(stopLossPrice) && entryPrice !== 0) {
-        const percent = ((stopLossPrice - entryPrice) / entryPrice) * 100;
-        lossPercent = `${percent.toFixed(2)}%`;
+        const rawPct = isShort
+          ? ((entryPrice - stopLossPrice) / entryPrice) * 100
+          : ((stopLossPrice - entryPrice) / entryPrice) * 100;
+        lossPercent = `${rawPct.toFixed(2)}%`;
       }
 
       const updatedMoodLog = [];
@@ -223,6 +227,7 @@ export default function InputForm() {
         timestamp: form.entryTimestamp,
         timeProvided: form.timeProvided,
       };
+
       if (moodEmoji && moodLabel) {
         updatedMoodLog.push({
           emoji: moodEmoji,
@@ -232,14 +237,15 @@ export default function InputForm() {
           timeProvided: form.timeProvided,
         });
       }
+
       const cleanedForm = {
         ...form,
-        expectations: expectations,
+        expectations,
         moodLog: updatedMoodLog,
         journalType: adjustedJournalType,
         isEntry: true,
         createdAt: serverTimestamp(),
-        exitPlan: exitPlan,
+        exitPlan,
         isClosed: false,
         totalSharesSold: 0,
         averageSoldPrice: 0,
@@ -248,8 +254,6 @@ export default function InputForm() {
       cleanedForm.entryPrice = parseFloat(cleanedForm.entryPrice);
       cleanedForm.shares = parseInt(cleanedForm.shares);
 
-      console.log("ur form", form);
-      console.log("your cleaned form", cleanedForm);
       delete cleanedForm.entryDate;
       delete cleanedForm.expectation;
       delete cleanedForm.entryTime;
@@ -263,7 +267,8 @@ export default function InputForm() {
         collection(db, "users", user.uid, "journalEntries"),
         cleanedForm
       );
-      // 🔹 Update behavioral metrics
+
+      // 🔹 Update behavioral metrics (unchanged)
       const behaviorRef = doc(
         db,
         "users",
@@ -272,11 +277,8 @@ export default function InputForm() {
         "behaviorMetrics"
       );
       const behaviorSnap = await getDoc(behaviorRef);
-      console.log("behavior snap exist is", behaviorSnap.exists());
-
       if (behaviorSnap.exists()) {
         const behaviorData = behaviorSnap.data();
-
         const newJournalCount = (behaviorData.journalEntryCount ?? 0) + 1;
         const newConfidenceTotal =
           (behaviorData.totalConfidenceScore ?? 0) +
@@ -285,30 +287,20 @@ export default function InputForm() {
         const newChecklistCounts = {
           ...(behaviorData.checklistItemCounts || {}),
         };
-
-        // Increment checklist item counts
-        console.log("your check list is", form.checklist);
-        Object.entries(form.checklist).forEach(([item, obj]) => {
-          console.log("item is", item, "obj is", obj);
-
+        Object.entries(form.checklist).forEach(([item]) => {
           newChecklistCounts[item] = (newChecklistCounts[item] ?? 0) + 1;
         });
 
-        // Determine new most used checklist item
+        // most used checklist item
         let topChecklistItem = behaviorData.mostUsedChecklistItem || "";
-        let maxCount = newChecklistCounts[topChecklistItem]??0;
-        console.log("ur max count is", maxCount)
+        let maxCount = newChecklistCounts[topChecklistItem] ?? 0;
         for (const [item, count] of Object.entries(newChecklistCounts)) {
           if (count > maxCount) {
-            console.log("ur top item is", item)
             maxCount = count;
             topChecklistItem = item;
           }
         }
-        console.log(
-          "your new checklist count to be updated is",
-          newChecklistCounts
-        );
+
         await updateDoc(behaviorRef, {
           journalEntryCount: newJournalCount,
           totalConfidenceScore: newConfidenceTotal,
@@ -316,7 +308,6 @@ export default function InputForm() {
           mostUsedChecklistItem: topChecklistItem,
         });
       } else {
-        // Fallback: behavior metrics doc not found
         await setDoc(behaviorRef, {
           journalEntryCount: 1,
           totalConfidenceScore: Number(form.confidence) || 0,
@@ -325,7 +316,7 @@ export default function InputForm() {
         });
       }
 
-      // Add to current position
+      // 🔸 Upsert currentPositions (LONG vs SHORT)
       const positionQuery = collection(
         db,
         "users",
@@ -334,67 +325,110 @@ export default function InputForm() {
       );
       const snapshot = await getDocs(positionQuery);
       const existing = snapshot.docs.find(
-        (doc) =>
-          doc.data().ticker.toUpperCase() === form.ticker.toUpperCase() &&
-          doc.data().direction === form.direction
+        (d) =>
+          d.data().ticker.toUpperCase() === form.ticker.toUpperCase() &&
+          (d.data().direction || "").toLowerCase() ===
+            (form.direction || "").toLowerCase()
       );
 
       if (existing) {
         const data = existing.data();
-        const totalShares = Number(data.shares) + Number(form.shares);
-        const totalCost =
-          Number(data.averagePrice) * Number(data.shares) +
-          Number(form.entryPrice) * Number(form.shares);
-        const newAvgPrice = totalCost / totalShares;
+        const prevShares = Number(data.shares) || 0;
+        const addShares = Number(form.shares) || 0;
 
-        const fifoStack = data.fifoStack || [];
-        fifoStack.push({
-          entryId: journalRef.id,
-          sharesRemaining: Number(form.shares),
-          entryPrice: Number(form.entryPrice),
-          entryTimestamp: form.entryTimestamp,
-        });
+        if (isShort) {
+          // Weighted avg on avgShortPrice (also mirror to averagePrice for legacy)
+          const prevAvg = Number(data.avgShortPrice ?? data.averagePrice ?? 0);
+          const newShares = prevShares + addShares;
+          const totalVal =
+            prevShares * prevAvg + addShares * Number(form.entryPrice);
+          const newAvg = newShares > 0 ? totalVal / newShares : 0;
 
-        await updateDoc(
-          doc(db, "users", user.uid, "currentPositions", existing.id),
-          {
-            shares: totalShares,
-            averagePrice: newAvgPrice,
-            fifoStack: fifoStack,
-            lastUpdated: serverTimestamp(),
-          }
-        );
+          await updateDoc(
+            doc(db, "users", user.uid, "currentPositions", existing.id),
+            {
+              shares: newShares,
+              avgShortPrice: newAvg,
+              averagePrice: newAvg, // legacy compatibility
+              lastUpdated: serverTimestamp(),
+            }
+          );
+        } else {
+          // LONG: maintain FIFO + averagePrice
+          const totalShares = prevShares + addShares;
+          const totalCost =
+            Number(data.averagePrice || 0) * prevShares +
+            Number(form.entryPrice) * addShares;
+          const newAvgPrice = totalCost / (totalShares || 1);
+
+          const fifoStack = Array.isArray(data.fifoStack)
+            ? [...data.fifoStack]
+            : [];
+          fifoStack.push({
+            entryId: journalRef.id,
+            sharesRemaining: addShares,
+            entryPrice: Number(form.entryPrice),
+            entryTimestamp: form.entryTimestamp,
+          });
+
+          await updateDoc(
+            doc(db, "users", user.uid, "currentPositions", existing.id),
+            {
+              shares: totalShares,
+              averagePrice: newAvgPrice,
+              fifoStack,
+              lastUpdated: serverTimestamp(),
+            }
+          );
+        }
       } else {
-        await setDoc(
-          doc(db, "users", user.uid, "currentPositions", journalRef.id),
-          {
-            ticker: form.ticker.toUpperCase(),
-            companyName: form.companyName,
-            shares: Number(form.shares),
-            averagePrice: Number(form.entryPrice),
-            entryDate: form.entryDate,
-            direction: form.direction,
-            journalEntryId: journalRef.id,
-            fifoStack: [
-              {
-                entryId: journalRef.id,
-                sharesRemaining: Number(form.shares),
-                entryPrice: Number(form.entryPrice),
-                entryTimestamp: form.entryTimestamp,
-              },
-            ],
-            createdAt: serverTimestamp(),
-          }
-        );
+        // Create new position doc
+        const base = {
+          ticker: form.ticker.toUpperCase(),
+          companyName: form.companyName,
+          shares: Number(form.shares),
+          entryDate: form.entryDate,
+          direction: form.direction, // 'long' | 'short'
+          journalEntryId: journalRef.id,
+          createdAt: serverTimestamp(),
+        };
+
+        if (isShort) {
+          await setDoc(
+            doc(db, "users", user.uid, "currentPositions", journalRef.id),
+            {
+              ...base,
+              avgShortPrice: Number(form.entryPrice),
+              averagePrice: Number(form.entryPrice), // legacy compatibility
+              // no fifoStack for shorts
+            }
+          );
+        } else {
+          await setDoc(
+            doc(db, "users", user.uid, "currentPositions", journalRef.id),
+            {
+              ...base,
+              averagePrice: Number(form.entryPrice),
+              fifoStack: [
+                {
+                  entryId: journalRef.id,
+                  sharesRemaining: Number(form.shares),
+                  entryPrice: Number(form.entryPrice),
+                  entryTimestamp: form.entryTimestamp,
+                },
+              ],
+            }
+          );
+        }
       }
 
+      // Update preferredChecklist weights
       const updatedPreferredChecklist = Object.fromEntries(
         Object.entries(form.checklist).map(([key, val]) => [
           key,
           { weight: val.weight ?? 1 },
         ])
       );
-
       await updateDoc(userRef, {
         preferredChecklist: updatedPreferredChecklist,
       });
@@ -403,42 +437,31 @@ export default function InputForm() {
       const entryDateStr = entryDateObj.toISOString().split("T")[0];
       const today = new Date();
       const firstDayInDb = userSnap.data()?.firstSnapshotDate;
-      const tradeCost = Number(form.shares) * Number(form.entryPrice);
 
-      // Only trigger snapshot logic if date is before today
+      // 🔁 If backdated, update holding-duration and backfill snapshots
       if (entryDateObj < today) {
-        console.log("im in pre backfill");
-        // 🔹 Calculate holding duration at entry (if backdated)
-        if (entryDateObj < today) {
-          const daysHeld = (today - entryDateObj) / (1000 * 60 * 60 * 24);
-          const capital = Number(form.shares) * Number(form.entryPrice);
-          const addedDays = daysHeld * capital;
+        // holding duration at entry (backdated)
+        const daysHeld = (today - entryDateObj) / (1000 * 60 * 60 * 24);
+        const capital = Number(form.shares) * Number(form.entryPrice);
+        const addedDays = daysHeld * capital;
 
-          const statsRef = doc(
-            db,
-            "users",
-            user.uid,
-            "stats",
-            "holdingDuration"
-          );
-          const statsSnap = await getDoc(statsRef);
+        const statsRef = doc(db, "users", user.uid, "stats", "holdingDuration");
+        const statsSnap = await getDoc(statsRef);
+        if (statsSnap.exists()) {
+          const statsData = statsSnap.data();
+          const updatedDays = (statsData.totalHoldingDays ?? 0) + addedDays;
+          const updatedCapital = (statsData.totalCapital ?? 0) + capital;
 
-          if (statsSnap.exists()) {
-            const statsData = statsSnap.data();
-            const updatedDays = (statsData.totalHoldingDays ?? 0) + addedDays;
-            const updatedCapital = (statsData.totalCapital ?? 0) + capital;
-
-            await updateDoc(statsRef, {
-              totalHoldingDays: updatedDays,
-              totalCapital: updatedCapital,
-            });
-          } else {
-            await setDoc(statsRef, {
-              totalHoldingDays: addedDays,
-              totalCapital: capital,
-              lastUpdatedDate: getDateStr(), // just to initialize
-            });
-          }
+          await updateDoc(statsRef, {
+            totalHoldingDays: updatedDays,
+            totalCapital: updatedCapital,
+          });
+        } else {
+          await setDoc(statsRef, {
+            totalHoldingDays: addedDays,
+            totalCapital: capital,
+            lastUpdatedDate: getDateStr(),
+          });
         }
 
         const tradeDetails = {
@@ -446,32 +469,32 @@ export default function InputForm() {
           fromDate: entryDateObj,
           newTrade: {
             ticker: form.ticker.toUpperCase(),
-            shares: Number(form.shares),
-            averagePrice: Number(form.entryPrice),
-            direction: form.direction,
+            shares: Number(form.shares), // positive count
+            averagePrice: Number(form.entryPrice), // used for avgShortPrice when short
+            direction: form.direction, // 'long' or 'short'
             entryTimestamp: form.entryTimestamp,
           },
-          tradeCost: form.direction === "long" ? tradeCost : 0,
+          tradeCost: 0, // no-cash snapshot world; safe to ignore
           isExit: false,
         };
 
-        // Case 1: update firstSnapshotDate if earlier
         if (!firstDayInDb || entryDateStr < firstDayInDb) {
           updateDoc(userRef, { firstSnapshotDate: entryDateStr }).catch((err) =>
             console.error("Failed to update firstSnapshotDate:", err)
           );
         }
+
         toast.info("⏳ Backfilling snapshots in background...", {
           position: "bottom-right",
           autoClose: 3000,
         });
 
-        // ✅ Fire-and-forget: run snapshot logic in background
         backfillSnapshotsFrom(tradeDetails).catch((err) =>
           console.error("❌ Backfill failed in background:", err)
         );
       }
 
+      // Reset form/UI
       setShowExpandedForm(false);
       setForm({
         ticker: "",
@@ -487,7 +510,7 @@ export default function InputForm() {
         strategyFit: "",
         confidence: 5,
         tags: "",
-        journalType: "buy", // fallback value
+        journalType: "buy",
         direction: "long",
         timeframe: "",
         riskReward: "",
@@ -503,21 +526,14 @@ export default function InputForm() {
       toast.success("📒 Journal entry submitted!", {
         position: "top-center",
         autoClose: 2000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
         theme: "colored",
       });
+
       setIsSubmitting(false);
-      console.log("input form calling invalidate snapshot");
       invalidateLiveSnapshot(user.uid);
-      // refreshSnapshot()
-      incrementRefresh(); // ✅ This will trigger refetch in FinancialMetricCard
+      incrementRefresh();
     } catch (error) {
       setIsSubmitting(false);
-
       console.error("Error submitting journal:", error);
       toast.error("❌ Failed to submit entry. Please try again.");
     }

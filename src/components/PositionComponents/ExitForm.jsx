@@ -66,7 +66,7 @@ const EXIT_REASONS = [
 
 export default function ExitForm({ onSubmit, onClose, stock }) {
   const [error, setError] = useState("");
-  const { incrementRefresh} = useUser();
+  const { incrementRefresh } = useUser();
   const [showReviewPrompt, setShowReviewPrompt] = useState(true);
   const [showAllExpectations, setShowAllExpectations] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState({});
@@ -166,11 +166,11 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isSubmitting) return; // 🔒 block double submit
+    if (isSubmitting) return;
     if (!validateFields()) return;
     if (!form.exitPrice || !form.shares || !form.exitReason) return;
 
-    setIsSubmitting(true); // 🔃 start loading
+    setIsSubmitting(true);
     const user = auth.currentUser;
     if (!user) {
       alert("User not logged in.");
@@ -188,7 +188,7 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
     const exitPrice = parseFloat(form.exitPrice);
 
     try {
-      // === Get user's position ===
+      // === Load position ===
       const currentPosRef = doc(
         db,
         "users",
@@ -197,356 +197,351 @@ export default function ExitForm({ onSubmit, onClose, stock }) {
         stock.id
       );
       const currentDoc = await getDoc(currentPosRef);
-
       if (!currentDoc.exists()) {
         alert("Current position not found.");
         return;
       }
 
       const currentData = currentDoc.data();
-      const currentShares = currentData.shares;
-      const fifoStack = currentData.fifoStack || [];
-      const currentAvgPrice = currentData.averagePrice;
-
+      const isShort =
+        (currentData.direction || stock.direction || "").toLowerCase() ===
+        "short";
+      const currentShares = Number(currentData.shares || 0);
       if (currentShares < exitShares) {
-        alert("You don't have enough shares to sell.");
+        alert("You don't have enough shares to exit.");
         return;
       }
 
-      // === FIFO Reduce ===
-      let remainingToSell = exitShares;
-      const newFifoStack = [];
-      const entryEvents = [];
-
-      for (const lot of fifoStack) {
-        if (remainingToSell <= 0) {
-          newFifoStack.push(lot);
-          continue;
-        }
-
-        const sellAmount = Math.min(lot.sharesRemaining, remainingToSell);
-
-        entryEvents.push({
-          entryId: lot.entryId,
-          entryPrice: lot.entryPrice,
-          entryTimestamp: lot.entryTimestamp,
-          sharesUsed: sellAmount,
-        });
-
-        const leftover = lot.sharesRemaining - sellAmount;
-        if (leftover > 0) {
-          newFifoStack.push({
-            ...lot,
-            sharesRemaining: leftover,
-          });
-        }
-
-        remainingToSell -= sellAmount;
-      }
-
-      if (remainingToSell > 0) {
-        alert("FIFO stack exhausted. Not enough shares to cover exit.");
-        return;
-      }
-      // 🔽 If the exit is backdated, subtract holding days for sold shares
+      // === Shared locals ===
       const exitDateObj = timestamp.toDate();
       const today = new Date();
 
-      if (exitDateObj < today) {
-        const statsRef = doc(db, "users", user.uid, "stats", "holdingDuration");
-        const statsSnap = await getDoc(statsRef);
+      // ────────────────────────────────────────────────────────────────
+      // LONG PATH (Sell)
+      // ────────────────────────────────────────────────────────────────
+      if (!isShort) {
+        const fifoStack = Array.isArray(currentData.fifoStack)
+          ? currentData.fifoStack
+          : [];
+        const currentAvgPrice = Number(currentData.averagePrice || 0);
 
-        if (statsSnap.exists()) {
-          const stats = statsSnap.data();
-          let totalDaysToSubtract = 0;
+        // FIFO reduce (your original)
+        let remainingToSell = exitShares;
+        const newFifoStack = [];
+        const entryEvents = [];
 
-          entryEvents.forEach((entry) => {
-            const entryDate =
-              entry.entryTimestamp.toDate?.() ?? new Date(entry.entryTimestamp);
-            const daysHeld = (exitDateObj - entryDate) / (1000 * 60 * 60 * 24);
-            const capital = entry.sharesUsed * entry.entryPrice;
-            totalDaysToSubtract += daysHeld * capital;
-          });
-
-          await updateDoc(statsRef, {
-            totalHoldingDays: stats.totalHoldingDays - totalDaysToSubtract,
-            // ❌ Don't touch totalCapital — that only updates on entry
-            // ✅ Don't touch lastUpdatedDate — handled by daily scheduler
-          });
+        for (const lot of fifoStack) {
+          if (remainingToSell <= 0) {
+            newFifoStack.push(lot);
+            continue;
+          }
+          const sellAmount = Math.min(
+            Number(lot.sharesRemaining || 0),
+            remainingToSell
+          );
+          if (sellAmount > 0) {
+            entryEvents.push({
+              entryId: lot.entryId,
+              entryPrice: Number(lot.entryPrice || 0),
+              entryTimestamp: lot.entryTimestamp,
+              sharesUsed: sellAmount,
+            });
+            const leftover = Number(lot.sharesRemaining || 0) - sellAmount;
+            if (leftover > 0) {
+              newFifoStack.push({ ...lot, sharesRemaining: leftover });
+            }
+            remainingToSell -= sellAmount;
+          }
         }
-      }
+        if (remainingToSell > 0) {
+          alert("FIFO stack exhausted. Not enough shares to sell.");
+          return;
+        }
 
-      // === Create Exit Journal ===
-      const entriesRef = collection(db, "users", user.uid, "journalEntries");
+        // (Backdated) subtract holding days for sold LONG shares
+        if (exitDateObj < today) {
+          const statsRef = doc(
+            db,
+            "users",
+            user.uid,
+            "stats",
+            "holdingDuration"
+          );
+          const statsSnap = await getDoc(statsRef);
+          if (statsSnap.exists()) {
+            const stats = statsSnap.data();
+            let totalDaysToSubtract = 0;
+            entryEvents.forEach((entry) => {
+              const entryDate =
+                entry.entryTimestamp.toDate?.() ??
+                new Date(entry.entryTimestamp);
+              const daysHeld =
+                (exitDateObj - entryDate) / (1000 * 60 * 60 * 24);
+              const capital = entry.sharesUsed * Number(entry.entryPrice || 0);
+              totalDaysToSubtract += daysHeld * capital;
+            });
+            await updateDoc(statsRef, {
+              totalHoldingDays:
+                (stats.totalHoldingDays || 0) - totalDaysToSubtract,
+            });
+          }
+        }
 
-      const linkedEntryIds = entryEvents.map((f) => f.entryId);
-
-      const totalCostBasis = entryEvents.reduce(
-        (sum, e) => sum + e.entryPrice * e.sharesUsed,
-        0
-      );
-      const totalSharesUsed = entryEvents.reduce(
-        (sum, e) => sum + e.sharesUsed,
-        0
-      );
-      const averageBuyPrice = totalSharesUsed
-        ? totalCostBasis / totalSharesUsed
-        : 0;
-
-      const pAndL = (exitPrice - averageBuyPrice) * totalSharesUsed;
-      const tradeDuration = null; // Update with your duration calc if needed
-
-      const exitJournal = {
-        ...form,
-        companyName: stock.companyName,
-        ticker: stock.ticker,
-        exitPrice,
-        shares: exitShares,
-        pAndL,
-        tradeDuration,
-        createdAt: serverTimestamp(),
-        journalType: stock.direction === "long" ? "sell" : "buy",
-        direction: stock.direction,
-        isEntry: false,
-        entryEvents,
-        linkedEntryIds,
-        averageBuyPrice,
-      };
-
-      delete exitJournal.exitDate;
-      delete exitJournal.exitTime;
-      delete exitJournal.expectations;
-
-      const exitDocRef = await addDoc(entriesRef, exitJournal);
-
-      // === Update entry journals with exitEvents + isClosed logic ===
-      for (const fifo of entryEvents) {
-        const entryRef = doc(
-          db,
-          "users",
-          user.uid,
-          "journalEntries",
-          fifo.entryId
-        );
-        const entrySnap = await getDoc(entryRef);
-        const entryData = entrySnap.data();
-        const prevEvents = entryData.exitEvents || [];
-
-        const newExitEvent = {
-          sharesSold: fifo.sharesUsed,
-          soldPrice: exitPrice,
-          exitTimestamp: timestamp,
-          exitJournalId: exitDocRef.id,
-        };
-
-        const updatedExitEvents = [...prevEvents, newExitEvent];
-
-        const totalSharesSold = updatedExitEvents.reduce(
-          (sum, e) => sum + e.sharesSold,
+        // Exit journal (LONG)
+        const totalCostBasis = entryEvents.reduce(
+          (s, e) => s + e.entryPrice * e.sharesUsed,
           0
         );
-        const totalProceeds = updatedExitEvents.reduce(
-          (sum, e) => sum + e.sharesSold * e.soldPrice,
+        const totalSharesUsed = entryEvents.reduce(
+          (s, e) => s + e.sharesUsed,
           0
         );
-        const averageSoldPrice = totalSharesSold
-          ? totalProceeds / totalSharesSold
+        const averageBuyPrice = totalSharesUsed
+          ? totalCostBasis / totalSharesUsed
           : 0;
+        const pAndL = (exitPrice - averageBuyPrice) * totalSharesUsed;
 
-        const entryTotalShares = entryData.shares || 0;
-        const isClosed = totalSharesSold >= entryTotalShares;
-
-        await updateDoc(entryRef, {
-          exitEvents: updatedExitEvents,
-          totalSharesSold,
-          averageSoldPrice,
-          isClosed,
-          status: isClosed ? "closed" : "open",
-        });
-      }
-
-      // === Update current position ===
-      const remainingShares = currentShares - exitShares;
-
-      if (remainingShares > 0) {
-        await updateDoc(currentPosRef, {
-          shares: remainingShares,
-          fifoStack: newFifoStack,
-          lastUpdated: serverTimestamp(),
-          averagePrice: getAveragePriceFromFIFO(newFifoStack),
-        });
-      } else {
-        await deleteDoc(currentPosRef); // fully closed
-      }
-
-      if (onSubmit) onSubmit(exitJournal);
-      const userRef = doc(db, "users", user.uid);
-      const userSnap = await getDoc(userRef);
-
-      // === Backfill snapshots if the exit is backdated ===
-      if (exitDateObj < today) {
-        await backfillSnapshotsFrom({
-          userId: user.uid,
-          fromDate: timestamp.toDate(),
-          newTrade: {
-            ticker: stock.ticker.toUpperCase(),
-            shares: parseFloat(form.shares), // positive
-            averagePrice: parseFloat(form.exitPrice),
-            direction: stock.direction,
-            entryTimestamp: timestamp,
-          },
-          tradeCost: parseFloat(form.shares) * parseFloat(form.exitPrice),
-          isExit: true,
-          pAndL: pAndL,
-        });
-      }
-      const dateStr = getDateStr(timestamp.toDate()); // Use the backdated timestamp, not today
-      const plRef = doc(db, "users", user.uid, "realizedPLByDate", dateStr);
-      const plSnap = await getDoc(plRef);
-      const prevPL = plSnap.exists() ? plSnap.data().realizedPL : 0;
-      const updatedPL = prevPL + pAndL;
-
-      if (plSnap.exists()) {
-        await updateDoc(plRef, {
-          realizedPL: updatedPL,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(plRef, {
-          realizedPL: updatedPL,
-          date: dateStr,
+        const entriesRef = collection(db, "users", user.uid, "journalEntries");
+        const exitJournal = {
+          ...form,
+          companyName: stock.companyName,
+          ticker: stock.ticker,
+          exitPrice,
+          shares: exitShares,
+          pAndL,
+          tradeDuration: null,
           createdAt: serverTimestamp(),
-        });
-      }
-      // === Update best/worst closed performers ===
-      const realizedPL = pAndL; // Already calculated above
-      const userData = userSnap.data();
-      const costBasis = totalCostBasis;
-      if (realizedPL > 0) {
-        await updateDoc(userRef, {
-          winCount: increment(1),
-        });
-      } else if (realizedPL < 0) {
-        await updateDoc(userRef, {
-          lossCount: increment(1),
-        });
-      }
-      const newClosed = {
-        ticker: stock.ticker,
-        realizedPL,
-        costBasis,
-        date: timestamp,
-      };
-
-      // Helper function to calculate % return
-      const getPLRatio = (item) =>
-        item && item.costBasis !== 0
-          ? item.realizedPL / item.costBasis
-          : -Infinity;
-
-      const best = userData.bestClosedPosition;
-      const worst = userData.worstClosedPosition;
-
-      const shouldUpdateBest =
-        !best || getPLRatio(newClosed) > getPLRatio(best);
-
-      const shouldUpdateWorst =
-        !worst || getPLRatio(newClosed) < getPLRatio(worst);
-
-      const updates = {};
-      if (shouldUpdateBest) updates.bestClosedPosition = newClosed;
-      if (shouldUpdateWorst) updates.worstClosedPosition = newClosed;
-
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(userRef, updates);
-      }
-      // 🔹 Update behavioral metrics for exit reasons
-      const behaviorRef = doc(
-        db,
-        "users",
-        user.uid,
-        "stats",
-        "behaviorMetrics"
-      );
-      const behaviorSnap = await getDoc(behaviorRef);
-
-      if (behaviorSnap.exists()) {
-        const behaviorData = behaviorSnap.data();
-        const reason = form.exitReason;
-        const reasonCounts = { ...(behaviorData.exitReasonCounts || {}) };
-
-        reasonCounts[reason] = (reasonCounts[reason] ?? 0) + 1;
-
-        // Determine most common exit reason
-        let topReason = behaviorData.mostCommonExitReason || "";
-        let maxCount = reasonCounts[topReason] ?? 0;
-
-        for (const [r, count] of Object.entries(reasonCounts)) {
-          if (count > maxCount) {
-            maxCount = count;
-            topReason = r;
-          }
-        }
-
-        await updateDoc(behaviorRef, {
-          exitReasonCounts: reasonCounts,
-          mostCommonExitReason: topReason,
-        });
-      } else {
-        // Fallback: create behavior metrics doc if missing
-        await setDoc(behaviorRef, {
-          journalEntryCount: 0,
-          totalConfidenceScore: 0,
-          exitReasonCounts: {
-            [form.exitReason]: 1,
-          },
-          mostCommonExitReason: form.exitReason,
-          checklistItemCounts: {},
-          mostUsedChecklistItem: "",
-        });
-      }
-      // 🔹 Update checklist reliability scores
-
-      if (behaviorSnap.exists()) {
-        const behaviorData = behaviorSnap.data();
-
-        const review = form.checklistReview || {};
-        const scoreMap = { positive: 1, neutral: 0, negative: -1 };
-        const updatedScores = {
-          ...(behaviorData.checklistReliabilityScores || {}),
+          journalType: "sell",
+          direction: "long",
+          isEntry: false,
+          entryEvents,
+          linkedEntryIds: entryEvents.map((f) => f.entryId),
+          averageBuyPrice,
         };
+        delete exitJournal.exitDate;
+        delete exitJournal.exitTime;
+        delete exitJournal.expectations;
 
-        for (const [item, result] of Object.entries(review)) {
-          const delta = scoreMap[result] ?? 0;
-          updatedScores[item] = (updatedScores[item] ?? 0) + delta;
+        const exitDocRef = await addDoc(entriesRef, exitJournal);
+
+        // Update linked entry journals (LONG)
+        for (const fifo of entryEvents) {
+          const entryRef = doc(
+            db,
+            "users",
+            user.uid,
+            "journalEntries",
+            fifo.entryId
+          );
+          const entrySnap = await getDoc(entryRef);
+          const entryData = entrySnap.data();
+          const prevEvents = entryData.exitEvents || [];
+
+          const newExitEvent = {
+            sharesSold: fifo.sharesUsed,
+            soldPrice: exitPrice,
+            exitTimestamp: timestamp,
+            exitJournalId: exitDocRef.id,
+          };
+          const updatedExitEvents = [...prevEvents, newExitEvent];
+          const totalSharesSold = updatedExitEvents.reduce(
+            (sum, e) => sum + e.sharesSold,
+            0
+          );
+          const totalProceeds = updatedExitEvents.reduce(
+            (sum, e) => sum + e.sharesSold * e.soldPrice,
+            0
+          );
+          const averageSoldPrice = totalSharesSold
+            ? totalProceeds / totalSharesSold
+            : 0;
+          const entryTotalShares = Number(entryData.shares || 0);
+          const isClosed = totalSharesSold >= entryTotalShares;
+
+          await updateDoc(entryRef, {
+            exitEvents: updatedExitEvents,
+            totalSharesSold,
+            averageSoldPrice,
+            isClosed,
+            status: isClosed ? "closed" : "open",
+          });
         }
 
-        // Determine most and least reliable
-        let mostReliable = "",
-          leastReliable = "";
-        let max = -Infinity,
-          min = Infinity;
-
-        for (const [item, score] of Object.entries(updatedScores)) {
-          if (score > max) {
-            max = score;
-            mostReliable = item;
-          }
-          if (score < min) {
-            min = score;
-            leastReliable = item;
-          }
+        // Update current position (LONG)
+        const remainingShares = currentShares - exitShares;
+        if (remainingShares > 0) {
+          await updateDoc(currentPosRef, {
+            shares: remainingShares,
+            fifoStack: newFifoStack,
+            lastUpdated: serverTimestamp(),
+            averagePrice: getAveragePriceFromFIFO(newFifoStack),
+          });
+        } else {
+          await deleteDoc(currentPosRef);
         }
 
-        await updateDoc(behaviorRef, {
-          checklistReliabilityScores: updatedScores,
-          mostReliableChecklistItem: mostReliable,
-          leastReliableChecklistItem: leastReliable,
-        });
+        // Backfill (if backdated)
+        if (exitDateObj < today) {
+          await backfillSnapshotsFrom({
+            userId: user.uid,
+            fromDate: timestamp.toDate(),
+            newTrade: {
+              ticker: stock.ticker.toUpperCase(),
+              shares: exitShares, // positive
+              averagePrice: exitPrice,
+              direction: "long",
+              entryTimestamp: timestamp,
+            },
+            tradeCost: exitShares * exitPrice,
+            isExit: true,
+            pAndL,
+          });
+        }
+
+        // realizedPLByDate update
+        const dateStr = getDateStr(timestamp.toDate());
+        const plRef = doc(db, "users", user.uid, "realizedPLByDate", dateStr);
+        const plSnap = await getDoc(plRef);
+        const prevPL = plSnap.exists()
+          ? Number(plSnap.data().realizedPL || 0)
+          : 0;
+        const updatedPL = prevPL + pAndL;
+        if (plSnap.exists()) {
+          await updateDoc(plRef, {
+            realizedPL: updatedPL,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await setDoc(plRef, {
+            realizedPL: updatedPL,
+            date: dateStr,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        // Best/Worst closed updates (LONG)
+        await updateClosedBestWorst(
+          user.uid,
+          stock.ticker,
+          pAndL,
+          totalCostBasis,
+          timestamp
+        );
+
+        // ────────────────────────────────────────────────────────────────
+        // SHORT PATH (Buy to Cover)
+        // ────────────────────────────────────────────────────────────────
+      } else {
+        const avgShortPrice = Number(
+          currentData.avgShortPrice ?? currentData.averagePrice ?? 0
+        );
+
+        // OPTION A (recommended now): no short lots — use avgShortPrice
+        let entryEvents = []; // none to link precisely without lots
+        let totalCostBasis = avgShortPrice * exitShares; // for % calc & closed ranking
+        const pAndL = (avgShortPrice - exitPrice) * exitShares; // short formula
+
+        // OPTION B (enable later): if you add currentData.shortLots, do FIFO here
+        // const shortLots = Array.isArray(currentData.shortLots) ? currentData.shortLots : [];
+        // ... compute entryEvents + pAndL = Σ (lot.entryPrice - exitPrice) * used
+
+        // Exit journal (SHORT)
+        const entriesRef = collection(db, "users", user.uid, "journalEntries");
+        const exitJournal = {
+          ...form,
+          companyName: stock.companyName,
+          ticker: stock.ticker,
+          exitPrice,
+          shares: exitShares,
+          pAndL,
+          tradeDuration: null,
+          createdAt: serverTimestamp(),
+          journalType: "buy",
+          direction: "short",
+          isEntry: false,
+          entryEvents, // empty when no shortLots
+          linkedEntryIds: entryEvents
+            .map((e) => e.entryId || "")
+            .filter(Boolean),
+          averageShortPrice: avgShortPrice,
+        };
+        delete exitJournal.exitDate;
+        delete exitJournal.exitTime;
+        delete exitJournal.expectations;
+
+        await addDoc(entriesRef, exitJournal);
+
+        // (Backdated) holding-duration subtraction for SHORTS:
+        // skip unless you implement shortLots—no precise timestamps to base it on.
+
+        // Update current position (SHORT)
+        const remainingShares = currentShares - exitShares;
+        if (remainingShares > 0) {
+          await updateDoc(currentPosRef, {
+            shares: remainingShares,
+            // keep avgShortPrice unchanged for remaining lots
+            lastUpdated: serverTimestamp(),
+          });
+        } else {
+          await deleteDoc(currentPosRef);
+        }
+
+        // Backfill (if backdated)
+        if (exitDateObj < today) {
+          await backfillSnapshotsFrom({
+            userId: user.uid,
+            fromDate: timestamp.toDate(),
+            newTrade: {
+              ticker: stock.ticker.toUpperCase(),
+              shares: exitShares, // positive
+              averagePrice: exitPrice, // cover price
+              direction: "short",
+              entryTimestamp: timestamp,
+            },
+            tradeCost: 0, // no-cash model
+            isExit: true,
+            pAndL,
+          });
+        }
+
+        // realizedPLByDate update
+        const dateStr = getDateStr(timestamp.toDate());
+        const plRef = doc(db, "users", user.uid, "realizedPLByDate", dateStr);
+        const plSnap = await getDoc(plRef);
+        const prevPL = plSnap.exists()
+          ? Number(plSnap.data().realizedPL || 0)
+          : 0;
+        const updatedPL = prevPL + pAndL;
+        if (plSnap.exists()) {
+          await updateDoc(plRef, {
+            realizedPL: updatedPL,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          await setDoc(plRef, {
+            realizedPL: updatedPL,
+            date: dateStr,
+            createdAt: serverTimestamp(),
+          });
+        }
+
+        // Best/Worst closed updates (SHORT)
+        await updateClosedBestWorst(
+          user.uid,
+          stock.ticker,
+          pAndL,
+          totalCostBasis,
+          timestamp,
+          "short"
+        );
       }
+
+      // Exit reason stats (unchanged)
+      await updateExitReasonStats(user.uid, form.exitReason);
+
       invalidateLiveSnapshot(user.uid);
       incrementRefresh();
-      setIsSubmitting(false); // ✅ done
+      setIsSubmitting(false);
     } catch (err) {
       setIsSubmitting(false);
       console.error("Error saving exit:", err);
