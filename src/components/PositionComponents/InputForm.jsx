@@ -5,6 +5,7 @@ import ConfidenceSlider from "./ConfidenceSlider";
 import RiskRewardInput from "./RiskRewardInput";
 import { db } from "../../firebase";
 import { auth } from "../../firebase";
+import { recalcSectorBreakdownAndSave } from "../../utils/getSectorBreakdownData";
 import {
   collection,
   addDoc,
@@ -528,6 +529,7 @@ export default function InputForm() {
         autoClose: 2000,
         theme: "colored",
       });
+await recalcSectorBreakdownAndSave(user.uid);
 
       setIsSubmitting(false);
       invalidateLiveSnapshot(user.uid);
