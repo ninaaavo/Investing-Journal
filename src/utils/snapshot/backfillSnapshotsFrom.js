@@ -4,37 +4,6 @@ import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { removeDividendFromUserDay } from "../dividends/removeDividendFromUserDay";
 
-function removeFromFifoStack(stack = [], sharesToRemove = 0, mode = "fifo") {
-  let remaining = Math.max(0, Number(sharesToRemove) || 0);
-  const next = Array.isArray(stack) ? stack.map((l) => ({ ...l })) : [];
-  let removedCost = 0;
-
-  // FIFO => oldest first (index 0); LIFO => newest first (last index)
-  const step = mode === "lifo" ? -1 : 1;
-  let i = mode === "lifo" ? next.length - 1 : 0;
-
-  while (remaining > 0 && next.length > 0 && i >= 0 && i < next.length) {
-    const lot = next[i] || {};
-    const lotShares = Math.max(0, Number(lot.shares) || 0);
-    const lotPrice = Number(lot.price) || 0;
-
-    if (lotShares <= remaining) {
-      removedCost += lotShares * lotPrice;
-      remaining -= lotShares;
-      next.splice(i, 1);
-      if (mode === "lifo") i -= 1; // list shrank
-      // fifo: i stays the same because current index now points to next item
-    } else {
-      // partial consume this lot
-      removedCost += remaining * lotPrice;
-      next[i] = { ...lot, shares: lotShares - remaining };
-      remaining = 0;
-    }
-  }
-
-  return { stack: next, removedCost };
-}
-
 function toIsoDate(d) {
   const z = new Date(d);
   z.setHours(0, 0, 0, 0);
@@ -45,6 +14,7 @@ function addDays(d, n) {
   x.setDate(x.getDate() + n);
   return x;
 }
+const N = (v) => Number.parseFloat(v || 0);
 
 export async function backfillSnapshotsFrom({
   userId,
@@ -64,157 +34,179 @@ export async function backfillSnapshotsFrom({
   const yesterday = addDays(today, -1);
   const yesterdayISO = toIsoDate(yesterday);
 
-  // --- EXIT PATH ---
+  // ---------------- EXIT PATH ----------------
   if (isExit) {
-    // If exit is today, just stop — we don't backfill today in historical snapshots
     if (fromISO === todayISO) {
       console.log("✅ Exit is today; no forward-day changes.");
       return;
     }
 
-    // Now we start on the actual exit date, not the day after
     const start = new Date(from);
-
-    // If the exit date is after yesterday, nothing to forward update
     if (toIsoDate(start) > yesterdayISO) {
       console.log("ℹ️ Exit was yesterday; no forward days to update.");
       return;
     }
 
-    const sharesSold = Math.abs(newTrade.shares);
+    const reduceShares = Math.abs(newTrade.shares);
+    const isShortExit = (newTrade.direction || "").toLowerCase() === "short";
 
     let cursor = new Date(start);
     while (toIsoDate(cursor) <= yesterdayISO) {
       const dateStr = toIsoDate(cursor);
       const snapRef = doc(db, "users", userId, "dailySnapshots", dateStr);
       const snapDoc = await getDoc(snapRef);
-
       if (!snapDoc.exists()) {
-        await removeDividendFromUserDay(userId, dateStr, ticker, sharesSold);
+        // For long sells we previously removed same-day dividends; keep that behavior
+        if (!isShortExit) await removeDividendFromUserDay(userId, dateStr, ticker, reduceShares);
         cursor = addDays(cursor, 1);
         continue;
       }
 
       const data = snapDoc.data() || {};
-      const positions = { ...(data.positions || {}) };
-      const pos = positions[ticker];
 
-      if (!pos) {
-        await removeDividendFromUserDay(userId, dateStr, ticker, sharesSold);
+      // Normalize to v2 structure
+      const longPositions = { ...(data.longPositions || data.positions || {}) };
+      const shortPositions = { ...(data.shortPositions || {}) };
+      const totals = { ...(data.totals || {}) };
+
+      if (!longPositions[ticker] && !shortPositions[ticker]) {
+        if (!isShortExit) await removeDividendFromUserDay(userId, dateStr, ticker, reduceShares);
         cursor = addDays(cursor, 1);
         continue;
       }
 
-      const originalShares = Number(pos.shares || 0);
-      const sharesForRemoval = Math.min(sharesSold, Math.abs(originalShares));
+      if (!isShortExit) {
+        // ---- Reduce LONG shares ----
+        const pos = longPositions[ticker];
+        const origShares = N(pos.shares || 0);
+        const take = Math.min(reduceShares, origShares);
+        if (origShares <= 0 || take <= 0) {
+          cursor = addDays(cursor, 1);
+          continue;
+        }
 
-      // --- NEW: update fifo stack and use its removed cost
-      let newFifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
-      let removedCostFromLots = 0;
+        const remain = origShares - take;
 
-      // only adjust fifoStack for long positions that actually use it
-      if (newTrade.direction !== "short" && newFifoStack.length > 0) {
-        const { stack, removedCost } = removeFromFifoStack(
-          newFifoStack,
-          sharesForRemoval,
-          "fifo"
-        );
-        newFifoStack = stack;
-        removedCostFromLots = removedCost;
-      }
+        const oldMV = N(pos.marketValue || 0);
+        const oldCB = N(pos.costBasis || 0);
+        const oldUPL = N(pos.unrealizedPL || (oldMV - oldCB));
 
-      let newShares;
-      if (newTrade.direction === "short") {
-        newShares = originalShares + sharesForRemoval;
+        const ratio = remain > 0 ? remain / origShares : 0;
+
+        // Scale MV & UPL linearly without price fetches; recompute CB by scaling
+        const newMV = oldMV * ratio;
+        const newCB = oldCB * ratio;
+        const newUPL = oldUPL * ratio;
+
+        // Update totals (long side & net)
+        const dMV = newMV - oldMV;
+        const dCB = newCB - oldCB;
+        const dUPLLong = newUPL - oldUPL;
+
+        totals.totalLongMarketValue = N(totals.totalLongMarketValue || 0) + dMV;
+        totals.unrealizedPLLong = N(totals.unrealizedPLLong || 0) + dUPLLong;
+        totals.unrealizedPLNet =
+          N(totals.unrealizedPLNet || 0) + dUPLLong; // short unchanged here
+        totals.equityNoCash =
+          N(totals.totalLongMarketValue || 0) - N(totals.totalShortLiability || 0);
+        totals.grossExposure =
+          N(totals.totalLongMarketValue || 0) + N(totals.totalShortLiability || 0);
+
+        if (remain === 0) {
+          delete longPositions[ticker];
+        } else {
+          longPositions[ticker] = {
+            ...pos,
+            shares: remain,
+            marketValue: newMV,
+            costBasis: newCB,
+            unrealizedPL: newUPL,
+          };
+        }
+
+        // Legacy compatibility fields
+        const newTotalMV = N(data.totalMarketValue || 0) + dMV;
+        const newTotalCB = N(data.totalCostBasis || 0) + dCB;
+        const newUPLTotal = N(data.unrealizedPL || 0) + dUPLLong; // long delta only
+        const totalPLPercent = newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
+
+        await updateDoc(snapRef, {
+          longPositions,
+          shortPositions,
+          totals,
+          // legacy
+          positions: longPositions, // optional to keep older readers alive
+          totalMarketValue: newTotalMV,
+          totalCostBasis: newTotalCB,
+          unrealizedPL: newUPLTotal,
+          totalPLPercent,
+        });
+
+        await removeDividendFromUserDay(userId, dateStr, ticker, take);
       } else {
-        newShares = originalShares - sharesForRemoval;
+        // ---- Reduce SHORT shares (COVER) ----
+        const pos = shortPositions[ticker];
+        const origShares = N(pos.shares || 0);
+        const take = Math.min(reduceShares, origShares);
+        if (origShares <= 0 || take <= 0) {
+          cursor = addDays(cursor, 1);
+          continue;
+        }
+
+        const remain = origShares - take;
+
+        const oldLiab = N(pos.liabilityAtSnapshot || 0);
+        const oldUPL = N(pos.unrealizedPL || 0);
+
+        const ratio = remain > 0 ? remain / origShares : 0;
+
+        const newLiab = oldLiab * ratio;
+        const newUPLShort = oldUPL * ratio;
+
+        const dLiab = newLiab - oldLiab;
+        const dUPLShort = newUPLShort - oldUPL;
+
+        totals.totalShortLiability = N(totals.totalShortLiability || 0) + dLiab;
+        totals.unrealizedPLShort = N(totals.unrealizedPLShort || 0) + dUPLShort;
+        totals.unrealizedPLNet =
+          N(totals.unrealizedPLNet || 0) + dUPLShort;
+        totals.equityNoCash =
+          N(totals.totalLongMarketValue || 0) - N(totals.totalShortLiability || 0);
+        totals.grossExposure =
+          N(totals.totalLongMarketValue || 0) + N(totals.totalShortLiability || 0);
+
+        if (remain === 0) {
+          delete shortPositions[ticker];
+        } else {
+          shortPositions[ticker] = {
+            ...pos,
+            shares: remain,
+            liabilityAtSnapshot: newLiab,
+            unrealizedPL: newUPLShort,
+          };
+        }
+
+        // Legacy: treat unrealizedPL net as long+short; long side unchanged here
+        const newUnrealizedNet =
+          N(data.unrealizedPL || 0) + dUPLShort;
+        await updateDoc(snapRef, {
+          longPositions,
+          shortPositions,
+          totals,
+          // legacy
+          positions: longPositions,
+          unrealizedPL: newUnrealizedNet,
+        });
       }
-
-      // Scale MV without fetching prices
-      const oldMV = Number(pos.marketValue || 0);
-      const oldCB = Number(pos.costBasis || 0);
-
-      // prefer cost implied by lots; fall back to avg cost if lots missing
-      const avgCostPerShare =
-        originalShares !== 0 ? oldCB / Math.abs(originalShares) : 0;
-      const usedSoldCost =
-        removedCostFromLots > 0
-          ? removedCostFromLots
-          : typeof newTrade.cost === "number" && !Number.isNaN(newTrade.cost)
-          ? newTrade.cost
-          : avgCostPerShare * sharesForRemoval;
-
-      const shareRatio = originalShares !== 0 ? newShares / originalShares : 0;
-      const newMV = oldMV * shareRatio;
-
-      // If we consumed lots, recompute CB from the new fifo; else use oldCB - usedSoldCost
-      const recomputedCBFromStack = newFifoStack.reduce(
-        (sum, lot) =>
-          sum + (Number(lot.shares) || 0) * (Number(lot.price) || 0),
-        0
-      );
-      const newCB =
-        newTrade.direction !== "short" &&
-        pos.fifoStack &&
-        pos.fifoStack.length > 0
-          ? recomputedCBFromStack
-          : Math.max(0, oldCB - usedSoldCost);
-
-      const newUPL = newMV - newCB;
-
-      const deltaMV = newMV - oldMV;
-      const deltaCB = newCB - oldCB;
-      const deltaUPL = newUPL - Number(pos.unrealizedPL || 0);
-
-      if (
-        newShares === 0 ||
-        (newTrade.direction === "long" && newShares < 0) ||
-        (newTrade.direction === "short" && newShares > 0)
-      ) {
-        delete positions[ticker];
-      } else {
-        positions[ticker] = {
-          ...pos,
-          shares: newShares,
-          marketValue: newMV,
-          costBasis: newCB,
-          unrealizedPL: newUPL,
-          // --- NEW: persist the updated fifo stack when applicable
-          fifoStack:
-            newTrade.direction !== "short" ? newFifoStack : pos.fifoStack,
-        };
-      }
-
-      const newTotalMV = Number(data.totalMarketValue || 0) + deltaMV;
-      const newTotalCB = Number(data.totalCostBasis || 0) + deltaCB;
-      const newUPLTotal = Number(data.unrealizedPL || 0) + deltaUPL;
-      const totalPLPercent = newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
-
-      await updateDoc(snapRef, {
-        positions,
-        totalMarketValue: newTotalMV,
-        totalCostBasis: newTotalCB,
-        unrealizedPL: newUPLTotal,
-        totalPLPercent,
-      });
-
-      await removeDividendFromUserDay(
-        userId,
-        dateStr,
-        ticker,
-        sharesForRemoval
-      );
 
       cursor = addDays(cursor, 1);
     }
 
-    console.log(
-      "✅ Exit backfill complete without price fetching (including exit day)."
-    );
+    console.log("✅ Exit backfill complete (v2 long/short).");
     return;
   }
 
-  // --- NON-EXIT PATH (existing behavior) ---
+  // ---------------- NON-EXIT PATH (add trade forward) ----------------
   const allDates = [];
   let cur = new Date(from);
   while (toIsoDate(cur) <= yesterdayISO) {
@@ -238,103 +230,166 @@ export async function backfillSnapshotsFrom({
     const dateStr = toIsoDate(dateCursor);
     const snapRef = doc(db, "users", userId, "dailySnapshots", dateStr);
 
-    const prevDate = addDays(dateCursor, -1);
-    const prevSnapRef = doc(
-      db,
-      "users",
-      userId,
-      "dailySnapshots",
-      toIsoDate(prevDate)
-    );
-
     const snapDoc = await getDoc(snapRef);
-    let basePositions = {};
+
+    // Base from previous or existing snapshot (normalize to v2)
+    let baseLong = {};
+    let baseShort = {};
     let cumulativeTrades = 0;
     let cumulativeInvested = 0;
     let cumulativeRealizedPL = 0;
 
     if (snapDoc.exists()) {
       const data = snapDoc.data();
-      basePositions = structuredClone(data.positions ?? {});
+      baseLong = structuredClone(data.longPositions ?? data.positions ?? {});
+      baseShort = structuredClone(data.shortPositions ?? {});
       cumulativeTrades = data.cumulativeTrades ?? 0;
       cumulativeInvested = data.cumulativeInvested ?? 0;
       cumulativeRealizedPL = data.cumulativeRealizedPL ?? 0;
     } else {
+      // try previous day
+      const prevDate = addDays(dateCursor, -1);
+      const prevSnapRef = doc(db, "users", userId, "dailySnapshots", toIsoDate(prevDate));
       const prevSnapDoc = await getDoc(prevSnapRef);
       if (prevSnapDoc.exists()) {
-        const prevData = prevSnapDoc.data();
-        basePositions = structuredClone(prevData.positions ?? {});
-        cumulativeTrades = prevData.cumulativeTrades ?? 0;
-        cumulativeInvested = prevData.cumulativeInvested ?? 0;
-        cumulativeRealizedPL = prevData.cumulativeRealizedPL ?? 0;
+        const prev = prevSnapDoc.data();
+        baseLong = structuredClone(prev.longPositions ?? prev.positions ?? {});
+        baseShort = structuredClone(prev.shortPositions ?? {});
+        cumulativeTrades = prev.cumulativeTrades ?? 0;
+        cumulativeInvested = prev.cumulativeInvested ?? 0;
+        cumulativeRealizedPL = prev.cumulativeRealizedPL ?? 0;
       }
     }
 
-    const positions = structuredClone(basePositions);
+    // Apply this trade
+    if ((newTrade.direction || "").toLowerCase() === "short") {
+      const prev = baseShort[ticker] || { shares: 0, avgShortPrice: 0 };
+      const newShares = N(prev.shares) + Math.abs(N(newTrade.shares));
+      const totalVal =
+        N(prev.shares) * N(prev.avgShortPrice) +
+        Math.abs(N(newTrade.shares)) * N(newTrade.averagePrice);
+      const avgShortPrice = newShares > 0 ? totalVal / newShares : 0;
 
-    if (!positions[ticker]) {
-      positions[ticker] = {
-        shares:
-          newTrade.direction === "short" ? -newTrade.shares : newTrade.shares,
-        fifoStack: [{ shares: newTrade.shares, price: newTrade.averagePrice }],
+      baseShort[ticker] = {
+        ...prev,
+        shares: newShares,
+        avgShortPrice,
       };
     } else {
-      positions[ticker].shares +=
-        newTrade.direction === "short" ? -newTrade.shares : newTrade.shares;
-      positions[ticker].fifoStack.push({
-        shares: newTrade.shares,
-        price: newTrade.averagePrice,
-      });
+      const prev = baseLong[ticker] || { shares: 0, fifoStack: [] };
+      const addShares = N(newTrade.shares);
+      const fifoStack = Array.isArray(prev.fifoStack) ? [...prev.fifoStack] : [];
+      fifoStack.push({ shares: addShares, price: N(newTrade.averagePrice) });
+      baseLong[ticker] = {
+        ...prev,
+        shares: N(prev.shares || 0) + addShares,
+        fifoStack,
+      };
     }
 
-    
-    cumulativeInvested += newTrade.averagePrice * newTrade.shares;
+    cumulativeInvested += N(newTrade.averagePrice) * N(newTrade.shares);
     cumulativeTrades += 1;
 
-    let totalMarketValue = 0;
-    let totalCostBasis = 0;
-    let unrealizedPL = 0;
+    // Price and compute P/L
+    const price = N(historicalPrices?.[ticker]?.priceMap?.[dateStr] ?? 0);
 
-    for (const sym in positions) {
-      const price = historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0;
-      const pos = positions[sym];
-      const shares = pos.shares;
-      const fifoStack = pos.fifoStack || [];
+    let totalLongMarketValue = 0;
+    let totalShortLiability = 0;
+    let totalCostBasisLong = 0;
+    let unrealizedPLLong = 0;
+    let unrealizedPLShort = 0;
 
-      const costBasis = fifoStack.reduce(
-        (sum, lot) => sum + lot.shares * lot.price,
-        0
-      );
-      const marketValue = shares * price;
-      const pl = marketValue - costBasis;
+    // valuate all longs
+    const longPositions = {};
+    for (const [sym, pos] of Object.entries(baseLong)) {
+      const p = sym === ticker ? price : N(historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0);
+      const shares = N(pos.shares || 0);
+      const fifoStack = (pos.fifoStack || []).map((l) => ({
+        shares: N(l.shares),
+        price: N(l.price),
+      }));
+      const costBasis = fifoStack.reduce((s, l) => s + l.shares * l.price, 0);
+      const mv = shares * p;
+      const upl = mv - costBasis;
 
-      positions[sym].priceAtSnapshot = price;
-      positions[sym].marketValue = marketValue;
-      positions[sym].costBasis = costBasis;
-      positions[sym].unrealizedPL = pl;
+      totalLongMarketValue += mv;
+      totalCostBasisLong += costBasis;
+      unrealizedPLLong += upl;
 
-      totalMarketValue += marketValue;
-      totalCostBasis += costBasis;
-      unrealizedPL += pl;
+      longPositions[sym] = {
+        shares,
+        fifoStack,
+        priceAtSnapshot: p,
+        marketValue: mv,
+        costBasis,
+        unrealizedPL: upl,
+      };
 
-      if (price === 0) {
-        if (!refetchMap[sym]) refetchMap[sym] = [];
-        refetchMap[sym].push(dateStr);
+      if (p === 0) {
+        (refetchMap[sym] ||= []).push(dateStr);
       }
     }
 
-    const totalAssets = totalMarketValue ;
+    // valuate all shorts
+    const shortPositions = {};
+    for (const [sym, pos] of Object.entries(baseShort)) {
+      const p = sym === ticker ? price : N(historicalPrices?.[sym]?.priceMap?.[dateStr] ?? 0);
+      const shares = N(pos.shares || 0);
+      const avgShortPrice = N(pos.avgShortPrice || 0);
+      const liab = shares * p;
+      const upl = (avgShortPrice - p) * shares;
+
+      totalShortLiability += liab;
+      unrealizedPLShort += upl;
+
+      shortPositions[sym] = {
+        shares,
+        avgShortPrice,
+        priceAtSnapshot: p,
+        liabilityAtSnapshot: liab,
+        unrealizedPL: upl,
+      };
+
+      if (p === 0) {
+        (refetchMap[sym] ||= []).push(dateStr);
+      }
+    }
+
+    const unrealizedPLNet = unrealizedPLLong + unrealizedPLShort;
+    const equityNoCash = totalLongMarketValue - totalShortLiability;
+    const grossExposure = totalLongMarketValue + totalShortLiability;
+
+    const totalMarketValue = totalLongMarketValue;
+    const totalCostBasis = totalCostBasisLong;
     const totalPLPercent =
-      totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+      totalCostBasis > 0 ? unrealizedPLNet / totalCostBasis : 0;
 
     await setDoc(snapRef, {
+      version: 2,
       date: dateStr,
-      totalAssets,
+      invested: totalMarketValue,
+      totalAssets: totalMarketValue,
+      netContribution: 0,
+
+      longPositions,
+      shortPositions,
+      totals: {
+        totalLongMarketValue,
+        totalShortLiability,
+        grossExposure,
+        equityNoCash,
+        unrealizedPLLong,
+        unrealizedPLShort,
+        unrealizedPLNet,
+      },
+
+      // legacy
+      positions: longPositions, // optional back-compat
       totalCostBasis,
       totalMarketValue,
-      unrealizedPL,
+      unrealizedPL: unrealizedPLNet,
       totalPLPercent,
-      positions,
+
       netContribution: 0,
       cumulativeTrades,
       cumulativeInvested,
@@ -342,51 +397,19 @@ export async function backfillSnapshotsFrom({
       createdAt: Timestamp.fromDate(new Date(dateStr)),
     });
 
-    const existingTotalDiv = snapDoc.exists()
-      ? snapDoc.data()?.totalDividendReceived ?? 0
-      : 0;
-
-    const injectedDividend =
-      historicalPrices?.[ticker]?.dividendMap?.[dateStr] ?? 0;
-    const sharesHeld = positions?.[ticker]?.shares ?? 0;
-    const addedDividendAmount = injectedDividend * sharesHeld;
-
-    if (addedDividendAmount > 0) {
-      await updateDoc(snapRef, {
-        totalDividendReceived: existingTotalDiv + addedDividendAmount,
-      });
-    }
-
     dateCursor.setDate(dateCursor.getDate() + 1);
   }
 
-  const dividendMap = {
-    [ticker]: historicalPrices?.[ticker]?.dividendMap ?? {},
-  };
-
-  if (allDates.length > 0) {
-    await checkAndAddDividendsToUser({
-      uid: userId,
-      from: allDates[0],
-      to: allDates[allDates.length - 1],
-      positions: { [ticker]: newTrade.shares },
-      dividendMap,
-      writeToSnapshot: true,
-    });
-  }
-
+  // (dividend writer for range remains in generateSnapshotRange)
+  // refetchQueue bookkeeping
   const userRef = doc(db, "users", userId);
   const userSnap = await getDoc(userRef);
   const userData = userSnap.data() || {};
   const existingQueue = userData.refetchQueue || {};
   const newQueue = { ...existingQueue };
-
   for (const [sym, dates] of Object.entries(refetchMap)) {
     const prevDates = newQueue[sym] ?? [];
     newQueue[sym] = Array.from(new Set([...prevDates, ...dates]));
   }
-
-  await updateDoc(userRef, {
-    refetchQueue: newQueue,
-  });
+  await updateDoc(userRef, { refetchQueue: newQueue });
 }

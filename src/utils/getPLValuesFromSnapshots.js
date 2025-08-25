@@ -24,16 +24,31 @@ function formatPLAndPct(totalPL, denom) {
   return `${money} (${pct})`;
 }
 
-/** Safe unit price from a position snapshot */
-function unitPriceFromPos(pos, fallbackShares) {
-  const p = pos?.priceAtSnapshot;
-  if (p != null) return Number(p);
-  const shares = Number(
-    pos?.shares ?? (fallbackShares != null ? fallbackShares : 0)
-  );
+/** Safe unit price from a LONG position snapshot */
+function unitPriceFromLongPos(pos) {
+  const p = Number(pos?.priceAtSnapshot ?? 0);
+  if (p) return p;
+  const shares = Number(pos?.shares ?? 0);
   const mv = Number(pos?.marketValue ?? 0);
   return shares > 0 ? mv / shares : 0;
 }
+
+/** Helpers to read v2 (fallback to legacy) */
+const getLongMap = (snap) => snap?.longPositions || snap?.positions || {};
+const getShortMap = (snap) => snap?.shortPositions || {};
+const getUnrealizedNet = (snap) =>
+  Number(
+    snap?.totals?.unrealizedPLNet ??
+      snap?.unrealizedPL /* legacy, may be long-only */
+  ) || 0;
+const getTotalCostBasisLong = (snap) =>
+  Number(
+    snap?.totalCostBasis ??
+      Object.values(getLongMap(snap)).reduce(
+        (s, p) => s + Number(p?.costBasis ?? 0),
+        0
+      )
+  ) || 0;
 
 /** YYYY-MM-DD in America/New_York */
 function formatETDate(date) {
@@ -86,78 +101,78 @@ async function loadSnapshotFixed(uid, dateStr) {
     ? snapDoc.data()
     : await getOrGenerateSnapshot(dateStr);
 
-  if (data?.positions) {
-    const tickersWithZero = Object.entries(data.positions)
+  // v2: fix zeros across long & short maps
+  const tickersWithZeroV2 = [
+    ...Object.entries(getLongMap(data))
       .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
-      .map(([ticker]) => ticker);
+      .map(([tk]) => tk),
+    ...Object.entries(getShortMap(data))
+      .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
+      .map(([tk]) => tk),
+  ];
 
-    for (const ticker of tickersWithZero) {
+  if (tickersWithZeroV2.length) {
+    for (const ticker of tickersWithZeroV2) {
       await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr });
     }
     const fixed = await getDoc(ref);
     if (fixed.exists()) data = fixed.data();
+  } else if (data?.positions) {
+    // legacy fallback
+    const tickersWithZero = Object.entries(data.positions)
+      .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
+      .map(([ticker]) => ticker);
+    if (tickersWithZero.length) {
+      for (const ticker of tickersWithZero) {
+        await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr });
+      }
+      const fixed = await getDoc(ref);
+      if (fixed.exists()) data = fixed.data();
+    }
   }
+
   return data;
 }
 
-/** OPEN P/L = sum((currentValue - costBasis)) and % = / totalCostBasis */
+/** OPEN P/L = net unrealized (long + short); % uses total long cost basis */
 export async function getOpenPLFromSnapshot(todaySnapshot) {
   if (!todaySnapshot) return "N/A";
-
-  let totalPL = 0;
-  let totalCost = 0;
-
-  const positions = todaySnapshot.positions || {};
-  for (const ticker of Object.keys(positions)) {
-    const pos = positions[ticker] || {};
-    const currentValue = Number(pos.currentValue ?? 0);
-    const costBasis = Number(pos.costBasis ?? 0);
-    totalPL += currentValue - costBasis;
-    totalCost += costBasis;
-  }
-
-  return formatPLAndPct(totalPL, totalCost);
+  const totalPL = getUnrealizedNet(todaySnapshot);
+  const denom = getTotalCostBasisLong(todaySnapshot);
+  return formatPLAndPct(totalPL, denom);
 }
 
 /**
- * DAY P/L
- * - If position opened today: (todayPrice - buyPriceToday) * todayShares
- * - Else: (todayPrice - yesterdayClose) * todayShares
- * Denominator for % is today's total cost basis.
+ * DAY P/L (no cash model)
+ * Intraday unrealized on OPEN positions + today's realized P/L.
+ * - Longs:
+ *     baseline = yesterday close if existed yesterday; else today's avg cost/share
+ *     intraday = (todayPrice - baseline) * todayShares
+ * - Shorts:
+ *     baseline = yesterday close if existed yesterday; else today's avgShortPrice
+ *     intraday = (baseline - todayPrice) * todayShares
+ * Denominator for % is today's total long cost basis.
  */
 export async function getDayPLFromSnapshots(todaySnapshot) {
   const user = auth.currentUser;
   if (!user || !todaySnapshot) return "N/A";
 
+  const uid = user.uid;
   const yStr = yesterdayStrET();
   const tStr = todayStrET();
 
-  // --- Load / fix yesterday snapshot (unchanged) ---
+  // Load/fix yesterday snapshot (v2-aware)
   let ySnap = null;
   try {
-    const yRef = doc(db, "users", user.uid, "dailySnapshots", yStr);
-    const yDoc = await getDoc(yRef);
-    ySnap = yDoc.exists() ? yDoc.data() : await getOrGenerateSnapshot(yStr);
-
-    if (ySnap?.positions) {
-      const tickersWithZero = Object.entries(ySnap.positions)
-        .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
-        .map(([ticker]) => ticker);
-
-      for (const ticker of tickersWithZero) {
-        await lazyFixSnapshotPrice({ userId: user.uid, ticker, date: yStr });
-      }
-      const fixed = await getDoc(yRef);
-      if (fixed.exists()) ySnap = fixed.data();
-    }
+    ySnap = await loadSnapshotFixed(uid, yStr);
   } catch (e) {
     console.warn("Could not load/fix yesterday snapshot:", e);
   }
 
-  // --- Pull today's realized P/L from realizedPLByDate/{YYYY-MM-DD} ---
+  // Today's realized P/L
   let realizedToday = 0;
   try {
-    const rRef = doc(db, "users", user.uid, "realizedPLByDate", tStr);
+    const rRef = doc(db, "users", uid, "realizedPLByDate", tStr);
     const rDoc = await getDoc(rRef);
     if (rDoc.exists()) {
       const v = Number(rDoc.data()?.realizedPL ?? 0);
@@ -167,58 +182,67 @@ export async function getDayPLFromSnapshots(todaySnapshot) {
     console.warn("Could not load realizedPLByDate:", e);
   }
 
-  // --- Unrealized intraday P/L on open positions (your logic) ---
-  const todayPositions = todaySnapshot.positions || {};
-  const yPositions = ySnap?.positions || {};
+  const tLongs = getLongMap(todaySnapshot);
+  const tShorts = getShortMap(todaySnapshot);
+  const yLongs = getLongMap(ySnap || {});
+  const yShorts = getShortMap(ySnap || {});
 
   let totalUnrealized = 0;
-  let totalCostToday = 0;
 
-  for (const ticker of Object.keys(todayPositions)) {
-    const tPos = todayPositions[ticker] || {};
-    const sharesToday = Number(tPos.shares ?? 0);
+  // ---- Longs intraday ----
+  for (const [tk, tPos] of Object.entries(tLongs)) {
+    const sharesToday = Number(tPos?.shares ?? 0);
     if (sharesToday <= 0) continue;
 
-    const todayUnitPrice = unitPriceFromPos(tPos, sharesToday);
+    const todayPrice = Number(tPos?.priceAtSnapshot ?? 0);
+    const existedYesterday = !!yLongs[tk];
 
-    const openedToday =
-      (tPos.entryDate && String(tPos.entryDate) === tStr) || false;
-
-    let baselinePrice = 0;
-
-    if (openedToday) {
-      const avg = tPos.averagePrice != null ? Number(tPos.averagePrice) : null;
-      if (avg != null && isFinite(avg)) {
-        baselinePrice = avg;
-      } else {
-        const cost = Number(tPos.costBasis ?? 0);
-        baselinePrice = sharesToday > 0 ? cost / sharesToday : 0;
-      }
+    let baseline = 0;
+    if (existedYesterday) {
+      // yesterday close
+      baseline = Number(yLongs[tk]?.priceAtSnapshot ?? unitPriceFromLongPos(yLongs[tk]));
     } else {
-      const yPos = yPositions[ticker];
-      if (yPos) {
-        baselinePrice = unitPriceFromPos(yPos, Number(yPos?.shares ?? 0));
-      } else {
-        baselinePrice = todayUnitPrice; // no yesterday → 0 impact
-      }
+      // today's avg cost/share
+      const cb = Number(tPos?.costBasis ?? 0);
+      baseline = sharesToday > 0 ? cb / sharesToday : 0;
     }
 
-    const plForTicker = (todayUnitPrice - baselinePrice) * sharesToday;
-    totalUnrealized += plForTicker;
-
-    totalCostToday += Number(tPos.costBasis ?? 0);
+    totalUnrealized += (todayPrice - baseline) * sharesToday;
   }
 
-  // --- Combine unrealized + realized for Day P/L ---
+  // ---- Shorts intraday ----
+  for (const [tk, tPos] of Object.entries(tShorts)) {
+    const sharesToday = Number(tPos?.shares ?? 0);
+    if (sharesToday <= 0) continue;
+
+    const todayPrice = Number(tPos?.priceAtSnapshot ?? 0);
+    const existedYesterday = !!yShorts[tk];
+
+    let baseline = 0;
+    if (existedYesterday) {
+      // yesterday close for shorts
+      baseline = Number(yShorts[tk]?.priceAtSnapshot ?? 0);
+    } else {
+      // today's avg short entry
+      baseline = Number(tPos?.avgShortPrice ?? 0);
+    }
+
+    totalUnrealized += (baseline - todayPrice) * sharesToday;
+  }
+
+  // Combine unrealized + realized for Day P/L
   const totalPL = totalUnrealized + realizedToday;
+
+  // Denominator: today's total long cost basis (stable across intraday)
+  const totalCostToday = getTotalCostBasisLong(todaySnapshot);
 
   return formatPLAndPct(totalPL, totalCostToday);
 }
 
 /**
  * TOTAL P/L BREAKDOWN (Realized + Unrealized) by timeframe
- * totalPL = (today.unrealizedPL - past.unrealizedPL) + sum(realizedPL, (past, today])
- * Percent denominator = past.totalCostBasis (stable, period-accurate)
+ * totalPL = (today.unrealizedNet - past.unrealizedNet) + (realized today - realized past)
+ * Percent denominator = past.totalCostBasis (longs only; stable, period-accurate)
  */
 export async function getTotalPLBreakdown(todaySnapshot) {
   const user = auth.currentUser;
@@ -226,7 +250,6 @@ export async function getTotalPLBreakdown(todaySnapshot) {
 
   const uid = user.uid;
   const todayStr = todayStrET();
-  console.log("yoru today snapshot is", todaySnapshot);
   const timeFrames = {
     "1D": 1,
     "1W": 7,
@@ -244,7 +267,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
   } catch {}
 
   const results = {};
-  const todayUnrealized = Number(todaySnapshot.unrealizedPL ?? 0);
+  const todayUnrealized = getUnrealizedNet(todaySnapshot);
 
   for (const [label, days] of Object.entries(timeFrames)) {
     let pastStr;
@@ -265,21 +288,18 @@ export async function getTotalPLBreakdown(todaySnapshot) {
     } catch (e) {
       console.warn(`Failed loading past snapshot ${pastStr}:`, e);
     }
-    // console.log("im in day", days);
-    const pastUnrealized = Number(pastSnap?.unrealizedPL ?? 0);
-    const denomPastCostBasis = Number(pastSnap?.totalCostBasis ?? 0);
-    // console.log("past snap is", pastSnap);
 
-    // realized sum within (pastStr, todayStr]
+    const pastUnrealized = getUnrealizedNet(pastSnap || {});
+    const denomPastCostBasis = getTotalCostBasisLong(pastSnap || {});
+
+    // realized diff (same approach you had)
     let realizedSum = 0;
     try {
       const realizedRef = collection(db, "users", uid, "realizedPLByDate");
 
-      // Get today's realized PL
       const todayDoc = await getDoc(doc(realizedRef, todayStr));
       const todayVal = Number(todayDoc.data()?.realizedPL ?? 0);
 
-      // Get past day's realized PL
       const pastDoc = await getDoc(doc(realizedRef, pastStr));
       const pastVal = Number(pastDoc.data()?.realizedPL ?? 0);
 
@@ -292,13 +312,6 @@ export async function getTotalPLBreakdown(todaySnapshot) {
         e
       );
     }
-
-    // console.log(
-    //   "today unrealized is",
-    //   todayUnrealized,
-    //   "past unrealized is",
-    //   pastUnrealized
-    // );
 
     const totalPL = todayUnrealized - pastUnrealized + realizedSum;
     results[label] = formatPLAndPct(totalPL, denomPastCostBasis);

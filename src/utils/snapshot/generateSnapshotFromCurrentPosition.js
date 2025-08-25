@@ -1,4 +1,3 @@
-// utils/snapshot/generateSnapshotFromCurrentPosition.js
 import { db } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import {
@@ -7,24 +6,15 @@ import {
   getDocs,
   getDoc,
   doc,
-  updateDoc,
 } from "firebase/firestore";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { addDividendToUserDay } from "../dividends/addDividendToUserDay";
 
-const safeParse = (val) => parseFloat(val || 0);
+const N = (v) => Number.parseFloat(v || 0);
 
 /**
  * Generate snapshot for a given past date using current positions (used for “yesterday”).
- * On each run (Day T building T-1):
- *   1) Reconcile T-2 dividends (writes history + bumps that day’s totals if needed)
- *   2) Compute T-1 dividends (no writes yet), include in T-1 snapshot totals
- *   3) Write dividendHistory for T-1 WITHOUT bumping snapshot totals again
- *
- * @param {Object} options
- * @param {string} options.date - ISO date string (e.g. "2025-08-06")  // the day we are generating for
- * @param {string} options.userId - Firebase UID
- * @returns {Promise<Object>} - Snapshot object for `date`
+ * Dividends are computed for LONGS only (short div in lieu ignored for now).
  */
 export default async function generateSnapshotFromCurrentPosition({
   date,
@@ -46,14 +36,12 @@ export default async function generateSnapshotFromCurrentPosition({
   const dateStr = new Date(date).toISOString().split("T")[0];
   const hist = await fetchHistoricalPrices(tickers, dateStr, dateStr);
 
-  const priceMap = {};
-  const dividendMap = {};
-  for (const tk of tickers) {
-    priceMap[tk] = hist[tk]?.priceMap?.[dateStr] ?? 0;
-    dividendMap[tk] = hist[tk]?.dividendMap ?? {};
-  }
+  const priceAt = (tk) => N(hist?.[tk]?.priceMap?.[dateStr] ?? 0);
+  const dividendMap = Object.fromEntries(
+    tickers.map((tk) => [tk, hist?.[tk]?.dividendMap ?? {}])
+  );
 
-  // ---------- (1) Reconcile T-2 ----------
+  // ---------- (1) Reconcile T-2 dividends for LONGS only ----------
   try {
     const d2 = new Date(date);
     d2.setDate(d2.getDate() - 2);
@@ -64,25 +52,33 @@ export default async function generateSnapshotFromCurrentPosition({
 
     if (d2SnapDoc.exists()) {
       const d2Snap = d2SnapDoc.data() || {};
-      const d2Positions = {};
-      for (const [tk, pos] of Object.entries(d2Snap.positions || {})) {
-        const sh = Number(pos?.shares || 0);
-        if (sh !== 0) d2Positions[tk] = sh;
+      // Accept v1 or v2 shape; extract long shares only
+      const v2Long = d2Snap.longPositions || {};
+      const v1Pos = d2Snap.positions || {};
+      const d2LongShares = {};
+
+      for (const [tk, p] of Object.entries(v2Long)) {
+        const sh = N(p?.shares || 0);
+        if (sh > 0) d2LongShares[tk] = sh;
+      }
+      if (!Object.keys(d2LongShares).length) {
+        for (const [tk, p] of Object.entries(v1Pos)) {
+          const sh = N(p?.shares || 0);
+          if (sh > 0) d2LongShares[tk] = sh;
+        }
       }
 
-      if (Object.keys(d2Positions).length > 0) {
-        // Build a filtered dividendMap only for tickers present on T-2
+      if (Object.keys(d2LongShares).length > 0) {
         const d2DivMap = {};
-        for (const tk of Object.keys(d2Positions)) {
+        for (const tk of Object.keys(d2LongShares)) {
           d2DivMap[tk] = dividendMap[tk] || {};
         }
 
-        // This will create/merge dividendHistory for T-2 and bump snapshot totals if needed
         await checkAndAddDividendsToUser({
           uid: userId,
           from: d2Str,
           to: d2Str,
-          positions: d2Positions,
+          positions: d2LongShares,
           dividendMap: d2DivMap,
           writeToSnapshot: true,
         });
@@ -92,55 +88,83 @@ export default async function generateSnapshotFromCurrentPosition({
     console.warn("T-2 dividend reconcile skipped/failed:", e?.message);
   }
 
-  // ---------- Build positions & P/L for dateStr ----------
-  let totalMarketValue = 0;
-  let totalCostBasis = 0;
-  let unrealizedPL = 0;
+  // ---------- Build positions & P/L for dateStr (longs + shorts) ----------
+  const longPositions = {};
+  const shortPositions = {};
 
-  const enrichedPositions = {};
-  const simplifiedPositions = {}; // {ticker: shares} for dividend calc
+  let totalLongMarketValue = 0;
+  let totalShortLiability = 0;
+  let totalCostBasisLong = 0;
+  let unrealizedPLLong = 0;
+  let unrealizedPLShort = 0;
 
   for (const pos of rawPositions) {
     const tk = pos.ticker;
-    const price = safeParse(priceMap[tk]);
-    const shares = safeParse(pos.shares);
-    const fifoStack = (pos.fifoStack || []).map((e) => ({
-      price: e.entryPrice,
-      shares: e.sharesRemaining,
-    }));
+    const price = priceAt(tk);
+    const sharesNum = N(pos.shares);
+    const sharesAbs = Math.abs(sharesNum);
+    const dir = (pos.direction || "").toLowerCase();
+    const isShort = dir === "short" || sharesNum < 0;
 
-    const costBasis = fifoStack.reduce(
-      (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),
-      0
-    );
-    const marketValue = shares * price;
-    const posUPL = marketValue - costBasis;
+    if (!isShort) {
+      const fifoStack = (pos.fifoStack || []).map((e) => ({
+        price: N(e.entryPrice ?? e.price ?? 0),
+        shares: N(e.sharesRemaining ?? e.shares ?? 0),
+      }));
 
-    totalMarketValue += marketValue;
-    totalCostBasis += costBasis;
-    unrealizedPL += posUPL;
+      const costBasis =
+        fifoStack.length > 0
+          ? fifoStack.reduce((s, l) => s + l.shares * l.price, 0)
+          : sharesAbs * N(pos.averagePrice ?? 0);
 
-    enrichedPositions[tk] = {
-      costBasis,
-      fifoStack,
-      marketValue,
-      priceAtSnapshot: price,
-      shares,
-      unrealizedPL: posUPL,
-    };
-    simplifiedPositions[tk] = shares;
+      const mv = sharesAbs * price;
+      const upl = mv - costBasis;
+
+      totalLongMarketValue += mv;
+      totalCostBasisLong += costBasis;
+      unrealizedPLLong += upl;
+
+      longPositions[tk] = {
+        shares: sharesAbs,
+        priceAtSnapshot: price,
+        marketValue: mv,
+        costBasis,
+        unrealizedPL: upl,
+        fifoStack,
+      };
+    } else {
+      const avgShortPrice = N(pos.avgShortPrice ?? pos.averagePrice ?? pos.avgPrice ?? 0);
+      const liab = sharesAbs * price;
+      const upl = (avgShortPrice - price) * sharesAbs;
+
+      totalShortLiability += liab;
+      unrealizedPLShort += upl;
+
+      shortPositions[tk] = {
+        shares: sharesAbs,
+        avgShortPrice,
+        priceAtSnapshot: price,
+        liabilityAtSnapshot: liab,
+        unrealizedPL: upl,
+      };
+    }
   }
 
-  const totalAssets = totalMarketValue;
-  const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+  const unrealizedPLNet = unrealizedPLLong + unrealizedPLShort;
+  const equityNoCash = totalLongMarketValue - totalShortLiability;
+  const grossExposure = totalLongMarketValue + totalShortLiability;
 
-  // ---------- (2) Compute T-1 dividends (no writes to DB yet) ----------
+  // ---------- (2) Compute T-1 dividends for LONGS only ----------
+  const longSharesForDivs = Object.fromEntries(
+    Object.entries(longPositions).map(([tk, p]) => [tk, p.shares])
+  );
+
   const { totalDividendByDate, dailyDividendMap } =
     await checkAndAddDividendsToUser({
       uid: userId,
       from: dateStr,
       to: dateStr,
-      positions: simplifiedPositions,
+      positions: longSharesForDivs,
       dividendMap,
       writeToSnapshot: false,
     });
@@ -155,7 +179,7 @@ export default async function generateSnapshotFromCurrentPosition({
     const prevStr = prevDate.toISOString().split("T")[0];
     const prevSnapDoc = await getDoc(doc(db, "users", userId, "dailySnapshots", prevStr));
     prevTotalDividend = prevSnapDoc.exists()
-      ? Number(prevSnapDoc.data()?.totalDividendReceived || 0)
+      ? N(prevSnapDoc.data()?.totalDividendReceived || 0)
       : 0;
   } catch (err) {
     console.warn("Failed to read previous snapshot for dividend carry:", err?.message);
@@ -165,17 +189,32 @@ export default async function generateSnapshotFromCurrentPosition({
 
   // ---------- Build snapshot object ----------
   const snapshot = {
+    version: 2,
     date: dateStr,
-    invested: totalMarketValue,
-    totalAssets,
+    invested: totalLongMarketValue,
+    totalAssets: totalLongMarketValue,
     netContribution: 0,
-    positions: enrichedPositions,
-    unrealizedPL,
-    totalCostBasis,
-    totalMarketValue,
-    totalPLPercent,
+
+    longPositions,
+    shortPositions,
+    totals: {
+      totalLongMarketValue,
+      totalShortLiability,
+      grossExposure,
+      equityNoCash,
+      unrealizedPLLong,
+      unrealizedPLShort,
+      unrealizedPLNet,
+    },
+
+    // Legacy fields
+    unrealizedPL: unrealizedPLNet,
+    totalCostBasis: totalCostBasisLong,
+    totalMarketValue: totalLongMarketValue,
+    totalPLPercent:
+      totalCostBasisLong > 0 ? unrealizedPLNet / totalCostBasisLong : 0,
+
     totalDividendReceived,
-    // Keep per-day dividend details for UI
     dividends: dailyDividendMap[dateStr] ?? [],
     createdAt: Timestamp.fromDate(new Date(dateStr)),
   };
@@ -189,12 +228,10 @@ export default async function generateSnapshotFromCurrentPosition({
         dateStr,
         ticker: entry.ticker,
         amountPerShare: Number(entry.amountPerShare) || 0,
-        // map your structure -> sharesApplied expected by writer
         sharesApplied: Number(entry.sharesHeld ?? entry.shares ?? 0) || 0,
-        updateSnapshot: false, // don't bump snapshot totals; we already set them above
+        updateSnapshot: false,
       });
     }
-
   } catch (e) {
     console.warn("Recording dividendHistory for T-1 failed:", e?.message);
   }

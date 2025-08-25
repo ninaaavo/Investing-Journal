@@ -1,20 +1,17 @@
-import { auth, db } from "../../firebase";
+import { auth } from "../../firebase";
 import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { Timestamp, collection, getDocs } from "firebase/firestore";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 
-const safeParse = (val) => parseFloat(val || 0);
+const N = (v) => Number.parseFloat(v || 0);
 
-export default async function generateSnapshot({
-  date = null,
-  baseSnapshot = null,
-}) {
+export default async function generateSnapshot({ date = null, baseSnapshot = null }) {
   const user = auth.currentUser;
   if (!user) throw new Error("User not authenticated");
 
   const uid = user.uid;
 
-  const positionsRef = collection(db, "users", uid, "currentPositions");
+  const positionsRef = collection(globalThis.db || (await import("../../firebase")).db, "users", uid, "currentPositions");
   const positionsSnap = await getDocs(positionsRef);
 
   const rawPositions = [];
@@ -23,7 +20,6 @@ export default async function generateSnapshot({
   positionsSnap.forEach((doc) => {
     const data = doc.data();
     if (!data.ticker || !data.shares) return;
-
     rawPositions.push({ id: doc.id, ...data });
     tickers.push(data.ticker);
   });
@@ -31,71 +27,115 @@ export default async function generateSnapshot({
   const targetDate = date ? new Date(date) : new Date();
   const dateStr = targetDate.toISOString().split("T")[0];
 
-  // ✅ Pass dateStr as string to avoid timezone drift
   const result = await fetchHistoricalPrices(tickers, dateStr, dateStr);
+  const priceAt = (tk) => N(result?.[tk]?.priceMap?.[dateStr] ?? 0);
+  const dividendMap = Object.fromEntries(
+    tickers.map((tk) => [tk, result?.[tk]?.dividendMap ?? {}])
+  );
 
-  const priceMap = {};
-  const dividendMap = {};
+  // ---- Build long/short maps ----
+  const longPositions = {};
+  const shortPositions = {};
 
-  for (const ticker of tickers) {
-    priceMap[ticker] = result[ticker]?.priceMap?.[dateStr] ?? 0;
-    dividendMap[ticker] = result[ticker]?.dividendMap ?? {};
-  }
-
-  console.log("Your price map is", priceMap);
-
-  const netContribution = safeParse(baseSnapshot?.netContribution);
-  // const prevPositions = baseSnapshot?.positions || {};
-
-  let totalMarketValue = 0;
-  let totalCostBasis = 0;
-  let unrealizedPL = 0;
-
-  const enrichedPositions = {};
+  let totalLongMarketValue = 0;
+  let totalShortLiability = 0;
+  let totalCostBasisLong = 0;
+  let unrealizedPLLong = 0;
+  let unrealizedPLShort = 0;
 
   for (const pos of rawPositions) {
-    const price = safeParse(priceMap[pos.ticker]);
-    const shares = safeParse(pos.shares);
-    const fifoStack = pos.fifoStack || [];
+    const tk = pos.ticker;
+    const price = priceAt(tk);
+    const sharesNum = N(pos.shares);
+    const sharesAbs = Math.abs(sharesNum);
+    const dir = (pos.direction || "").toLowerCase();
+    const isShort = dir === "short" || sharesNum < 0;
 
-    const costBasis = fifoStack.reduce(
-      (sum, lot) => sum + safeParse(lot.shares) * safeParse(lot.price),
-      0
-    );
-    const marketValue = shares * price;
-    const posUnrealizedPL = marketValue - costBasis;
+    if (!isShort) {
+      const fifoStack = Array.isArray(pos.fifoStack)
+        ? pos.fifoStack.map((lot) => ({
+            shares: N(lot.sharesRemaining ?? lot.shares ?? 0),
+            price: N(lot.entryPrice ?? lot.price ?? 0),
+          }))
+        : [];
 
-    totalMarketValue += marketValue;
-    totalCostBasis += costBasis;
-    unrealizedPL += posUnrealizedPL;
+      const costBasis =
+        fifoStack.length > 0
+          ? fifoStack.reduce((s, l) => s + l.shares * l.price, 0)
+          : sharesAbs * N(pos.averagePrice ?? 0);
 
-    enrichedPositions[pos.ticker] = {
-      ...pos,
-      priceAtSnapshot: price,
-      currentValue: marketValue,
-      costBasis,
-      unrealizedPL: posUnrealizedPL,
-    };
+      const marketValue = sharesAbs * price;
+      const upl = marketValue - costBasis;
+
+      totalLongMarketValue += marketValue;
+      totalCostBasisLong += costBasis;
+      unrealizedPLLong += upl;
+
+      longPositions[tk] = {
+        shares: sharesAbs,
+        priceAtSnapshot: price,
+        marketValue,
+        costBasis,
+        unrealizedPL: upl,
+        fifoStack,
+      };
+    } else {
+      const avgShortPrice = N(pos.avgShortPrice ?? pos.averagePrice ?? pos.avgPrice ?? 0);
+      const liabilityAtSnapshot = sharesAbs * price;
+      const upl = (avgShortPrice - price) * sharesAbs;
+
+      totalShortLiability += liabilityAtSnapshot;
+      unrealizedPLShort += upl;
+
+      shortPositions[tk] = {
+        shares: sharesAbs,
+        avgShortPrice,
+        priceAtSnapshot: price,
+        liabilityAtSnapshot,
+        unrealizedPL: upl,
+      };
+    }
   }
 
-  const totalAssets = totalMarketValue;
-  const totalPLPercent = totalCostBasis > 0 ? unrealizedPL / totalCostBasis : 0;
+  const unrealizedPLNet = unrealizedPLLong + unrealizedPLShort;
+  const equityNoCash = totalLongMarketValue - totalShortLiability;
+  const grossExposure = totalLongMarketValue + totalShortLiability;
 
-  // ✅ Inject dividendMap directly to avoid double-fetching
+  // Back-compat
+  const totalMarketValue = totalLongMarketValue;
+  const totalCostBasis = totalCostBasisLong;
+  const totalPLPercent = totalCostBasis > 0 ? unrealizedPLNet / totalCostBasis : 0;
+
+  // Dividends for LONGS only
   await checkAndAddDividendsToUser({
     uid,
     dateStr,
-    positions: enrichedPositions,
+    positions: Object.fromEntries(Object.entries(longPositions).map(([tk, p]) => [tk, p.shares])),
     dividendMap,
     writeToSnapshot: true,
   });
 
   return {
+    version: 2,
+    date: dateStr,
     invested: totalMarketValue,
-    totalAssets,
-    netContribution,
-    positions: enrichedPositions,
-    unrealizedPL,
+    totalAssets: totalMarketValue,
+    netContribution: N(baseSnapshot?.netContribution),
+
+    longPositions,
+    shortPositions,
+    totals: {
+      totalLongMarketValue,
+      totalShortLiability,
+      grossExposure,
+      equityNoCash,
+      unrealizedPLLong,
+      unrealizedPLShort,
+      unrealizedPLNet,
+    },
+
+    // legacy
+    unrealizedPL: unrealizedPLNet,
     totalCostBasis,
     totalMarketValue,
     totalPLPercent,

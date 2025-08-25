@@ -22,6 +22,6 @@ export async function getCachedLiveSnapshot(uid, force = false) {
   const snapshot = await getOrUpdateLiveSnapshot(uid);
   cachedSnapshot = snapshot;
   lastFetchedTime = now;
-
+  console.log("the cached live snap is", snapshot)
   return snapshot;
 }

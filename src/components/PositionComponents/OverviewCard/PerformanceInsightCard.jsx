@@ -9,58 +9,77 @@ import { calculateWinRate } from "../../../utils/calculateWinRate";
 const PerformanceInsightsCard = () => {
   const { todaySnapshot, refreshTrigger } = useUser();
   const [usePLPercentage, setUsePLPercentage] = useState(true);
+
+  // store BOTH text and numeric value so we can color correctly
   const [currentPerformance, setCurrentPerformance] = useState({
-    best: "Loading...",
-    worst: "Loading...",
+    best: { text: "Loading...", val: 0 },
+    worst: { text: "Loading...", val: 0 },
   });
   const [allTimePerformance, setAllTimePerformance] = useState({
-    best: "Loading...",
-    worst: "Loading...",
+    best: { text: "Loading...", val: 0 },
+    worst: { text: "Loading...", val: 0 },
   });
+
   const [winRate, setWinRate] = useState("Loading...");
   const [sharpeRatio, setSharpeRatio] = useState("Loading...");
 
-  // 🧠 Calculate best/worst from snapshot
+  const fmtMoneySigned = (v) =>
+    `${v >= 0 ? "+" : "-"}$${Math.abs(v).toLocaleString()}`;
+
+  const longMap = todaySnapshot?.longPositions || todaySnapshot?.positions || {};
+  const shortMap = todaySnapshot?.shortPositions || {};
+
+  const valForLong = (pos) => {
+    const upl = Number(pos?.unrealizedPL ?? 0);
+    if (!usePLPercentage) return upl;
+    const cb = Number(pos?.costBasis ?? 0);
+    return cb !== 0 ? upl / cb : 0;
+  };
+  const valForShort = (pos) => {
+    const upl = Number(pos?.unrealizedPL ?? 0);
+    if (!usePLPercentage) return upl;
+    const shares = Number(pos?.shares ?? 0);
+    const avgShort = Number(pos?.avgShortPrice ?? 0);
+    const shortNotional = shares * avgShort;
+    return shortNotional !== 0 ? upl / shortNotional : 0;
+  };
+
+  const formatLine = (side, symbol, value) =>
+    usePLPercentage
+      ? `${side} - ${symbol} (${(value * 100).toFixed(1)}%)`
+      : `${side} - ${symbol} (${fmtMoneySigned(value)})`;
+
+  // Best/Worst from current holdings (long + short)
   useEffect(() => {
     if (!todaySnapshot) return;
 
-    const positions = todaySnapshot.positions || {};
-    let bestSymbol = null;
-    let worstSymbol = null;
-    let bestValue = -Infinity;
-    let worstValue = Infinity;
+    let best = { side: null, tk: null, v: -Infinity };
+    let worst = { side: null, tk: null, v: Infinity };
 
-    for (const [ticker, pos] of Object.entries(positions)) {
-      const { unrealizedPL, costBasis } = pos;
-      if (unrealizedPL === undefined || costBasis === undefined) continue;
-
-      const percentPL = costBasis !== 0 ? unrealizedPL / costBasis : 0;
-      const value = usePLPercentage ? percentPL : unrealizedPL;
-
-      if (value > bestValue) {
-        bestValue = value;
-        bestSymbol = ticker;
-      }
-      if (value < worstValue) {
-        worstValue = value;
-        worstSymbol = ticker;
-      }
+    for (const [tk, pos] of Object.entries(longMap)) {
+      const v = valForLong(pos);
+      if (v > best.v) best = { side: "Long", tk, v };
+      if (v < worst.v) worst = { side: "Long", tk, v };
+    }
+    for (const [tk, pos] of Object.entries(shortMap)) {
+      const v = valForShort(pos);
+      if (v > best.v) best = { side: "Short", tk, v };
+      if (v < worst.v) worst = { side: "Short", tk, v };
     }
 
-    const format = (symbol, value) => {
-      if (!symbol || !isFinite(value)) return "N/A";
-      return usePLPercentage
-        ? `${symbol} (${(value * 100).toFixed(1)}%)`
-        : `${symbol} (${value >= 0 ? "+" : "-"}$${Math.abs(value).toLocaleString()})`;
-    };
-
     setCurrentPerformance({
-      best: format(bestSymbol, bestValue),
-      worst: format(worstSymbol, worstValue),
+      best:
+        best.tk == null || !isFinite(best.v)
+          ? { text: "N/A", val: 0 }
+          : { text: formatLine(best.side, best.tk, best.v), val: best.v },
+      worst:
+        worst.tk == null || !isFinite(worst.v)
+          ? { text: "N/A", val: 0 }
+          : { text: formatLine(worst.side, worst.tk, worst.v), val: worst.v },
     });
   }, [todaySnapshot, usePLPercentage]);
 
-  // 🧠 Fetch all-time performance and win rate
+  // All-time performance & win rate (prefix Long/Short and keep numeric)
   useEffect(() => {
     const fetchPerformance = async () => {
       const rate = await calculateWinRate();
@@ -82,17 +101,23 @@ const PerformanceInsightsCard = () => {
         const best = userData.bestClosedPosition;
         const worst = userData.worstClosedPosition;
 
-        const format = (pos) => {
-          if (!pos || !isFinite(pos.realizedPL) || !isFinite(pos.costBasis))
-            return "N/A";
-          return usePLPercentage
-            ? `${pos.ticker} (${((pos.realizedPL / pos.costBasis) * 100).toFixed(1)}%)`
-            : `${pos.ticker} (${pos.realizedPL >= 0 ? "+" : "-"}$${Math.abs(pos.realizedPL).toLocaleString()})`;
+        const toLine = (pos) => {
+          if (!pos || !isFinite(pos.realizedPL) || !isFinite(pos.costBasis)) {
+            return { text: "N/A", val: 0 };
+          }
+          const side =
+            (pos.direction || "").toLowerCase() === "short" ? "Short" : "Long";
+          if (usePLPercentage) {
+            const pct = pos.costBasis !== 0 ? pos.realizedPL / pos.costBasis : 0;
+            return { text: formatLine(side, pos.ticker, pct), val: pct };
+          } else {
+            return { text: formatLine(side, pos.ticker, pos.realizedPL), val: pos.realizedPL };
+          }
         };
 
         setAllTimePerformance({
-          best: format(best),
-          worst: format(worst),
+          best: toLine(best),
+          worst: toLine(worst),
         });
       }
     };
@@ -100,41 +125,47 @@ const PerformanceInsightsCard = () => {
     fetchPerformance();
   }, [usePLPercentage, refreshTrigger]);
 
-  const getColorClass = (value) => {
-    if (typeof value !== "string") return "";
-    return value.includes("-") ? "text-red-500" : "text-green-600";
+  const getColorClass = (item) => {
+    if (!item) return "";
+    const v = Number(item.val);
+    if (!isFinite(v)) return "";
+    if (v > 0) return "text-green-600";
+    if (v < 0) return "text-red-500";
+    return "text-gray-600";
   };
 
   const insightsFields = useMemo(
     () => [
       {
         label: `Best Performer (Current)`,
-        value: currentPerformance.best,
+        value: currentPerformance.best.text,
         valueClass: getColorClass(currentPerformance.best),
-        info: `Stock with the highest return in your current holdings (${usePLPercentage ? "% return" : "dollar gain"}).`,
+        info:
+          "Best return among your open positions. Long uses UPL/Cost Basis. Short uses UPL/Short Notional.",
       },
       {
         label: `Best Performer (All Time)`,
-        value: allTimePerformance.best,
+        value: allTimePerformance.best.text,
         valueClass: getColorClass(allTimePerformance.best),
-        info: `Highest performer you've ever held (${usePLPercentage ? "% return" : "dollar gain"}).`,
+        info: `Best closed trade (${usePLPercentage ? "% return" : "dollar gain"}).`,
       },
       {
         label: `Worst Performer (Current)`,
-        value: currentPerformance.worst,
+        value: currentPerformance.worst.text,
         valueClass: getColorClass(currentPerformance.worst),
-        info: `Biggest current loss (${usePLPercentage ? "% loss" : "dollar loss"}).`,
+        info:
+          "Worst current return. Long uses UPL/Cost Basis. Short uses UPL/Short Notional.",
       },
       {
         label: `Worst Performer (All Time)`,
-        value: allTimePerformance.worst,
+        value: allTimePerformance.worst.text,
         valueClass: getColorClass(allTimePerformance.worst),
-        info: `Worst performer ever (${usePLPercentage ? "% loss" : "dollar loss"}).`,
+        info: `Worst closed trade (${usePLPercentage ? "% loss" : "dollar loss"}).`,
       },
       {
         label: "Win Rate",
         value: winRate,
-        info: "The percentage of closed positions where you made a profit.",
+        info: "Percentage of closed positions that were profitable.",
       },
       // {
       //   label: "Sharpe Ratio",

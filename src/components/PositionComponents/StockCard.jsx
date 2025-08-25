@@ -16,21 +16,16 @@ export default function StockCard({
   const { todaySnapshot, lastUpdated } = useUser(); // <-- live snapshot + timestamp
   const isLong = direction === "long";
   const actionLabel = isLong ? "Sell This" : "Buy This";
-
+  // console.log("today snap is", todaySnapshot)
   const cardRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
   const [anchorRect, setAnchorRect] = useState(null);
-  // console.log("im stock card, today snap is", todaySnapshot);
 
   // Helper: try multiple shapes your snapshot might use
   const getLivePriceFromSnapshot = (snap, tkr) => {
     if (!snap || !tkr) return null;
 
-    // Common shapes:
-    // - snap.positions[tkr].price | .currentPrice | .marketPrice
-    // - snap.priceMap[tkr]
-    // - snap.positions[tkr].marketValue / shares  (fallback if shares present)
-    const pos = snap.positions?.[tkr];
+    const pos = direction == "long"? snap.longPositions?.[tkr] : snap.shortPositions?.[tkr];
 
     const direct =
       pos?.priceAtSnapshot ??

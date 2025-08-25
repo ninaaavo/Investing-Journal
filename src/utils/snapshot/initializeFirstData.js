@@ -3,31 +3,42 @@ import { db } from "../../firebase";
 
 export async function initializeFirstData(userId) {
   const today = new Date();
-
-  // ⏪ Set to "yesterday" to match first day snapshot logic
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-
   const yyyyMMdd = yesterday.toISOString().split("T")[0];
 
-  // 🔹 1. Create daily snapshot with object-based `positions`
+  // v2 snapshot skeleton (no cash, long/short split)
   const snapshotRef = doc(db, "users", userId, "dailySnapshots", yyyyMMdd);
   await setDoc(snapshotRef, {
+    version: 2,
     date: yyyyMMdd,
+    invested: 0,
+    totalAssets: 0,
+    netContribution: 0,
+
+    longPositions: {},
+    shortPositions: {},
+    totals: {
+      totalLongMarketValue: 0,
+      totalShortLiability: 0,
+      grossExposure: 0,
+      equityNoCash: 0,
+      unrealizedPLLong: 0,
+      unrealizedPLShort: 0,
+      unrealizedPLNet: 0,
+    },
+
+    // legacy (for existing UI)
     totalCostBasis: 0,
     totalMarketValue: 0,
     unrealizedPL: 0,
     totalPLPercent: 0,
-    totalAssets: 0,
-    netContribution: 0,
-    positions: {},
-    cumulativeTrades: 0,
-    cumulativeInvested: 0,
-    cumulativeRealizedPL: 0,
+
+    totalDividendReceived: 0,
     createdAt: Timestamp.fromDate(yesterday),
   });
 
-  // 🔹 2. Create initial realized profit/loss entry
+  // Realized P/L day-0
   const realizedPLRef = doc(db, "users", userId, "realizedPLByDate", yyyyMMdd);
   await setDoc(realizedPLRef, {
     realizedPL: 0,
@@ -35,7 +46,7 @@ export async function initializeFirstData(userId) {
     createdAt: Timestamp.fromDate(yesterday),
   });
 
-  // 🔹 3. Save first snapshot date to user profile
+  // Profile flags
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
     firstSnapshotDate: yyyyMMdd,
@@ -43,15 +54,15 @@ export async function initializeFirstData(userId) {
     lossCount: 0,
   });
 
-  // 🔹 4. Initialize capital-weighted holding stats
+  // Holding-duration stats
   const statsRef = doc(db, "users", userId, "stats", "holdingDuration");
   await setDoc(statsRef, {
     totalHoldingDays: 0,
     totalCapital: 0,
-    lastUpdatedDate: yyyyMMdd, // Start at yesterday
+    lastUpdatedDate: yyyyMMdd,
   });
 
-  // 🔹 5. Initialize behavioral metrics
+  // Behavioral metrics
   const behaviorRef = doc(db, "users", userId, "stats", "behaviorMetrics");
   await setDoc(behaviorRef, {
     journalEntryCount: 0,
@@ -60,11 +71,11 @@ export async function initializeFirstData(userId) {
     exitReasonCounts: {},
     mostUsedChecklistItem: "",
     checklistItemCounts: {},
-    checklistReliabilityScores: {}, // 🆕 Per-item reliability scores
-    mostReliableChecklistItem: "", // 🆕 Top scorer
-    leastReliableChecklistItem: "", // 🆕 Bottom scorer
-    exitEvalSum: 0, // 🆕 Total stars
-    exitEvalCount: 0, // 🆕 Number of ratings
-    avgExitEvaluation: 0, // 🆕 Computed
+    checklistReliabilityScores: {},
+    mostReliableChecklistItem: "",
+    leastReliableChecklistItem: "",
+    exitEvalSum: 0,
+    exitEvalCount: 0,
+    avgExitEvaluation: 0,
   });
 }

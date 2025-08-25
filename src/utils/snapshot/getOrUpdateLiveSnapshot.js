@@ -39,6 +39,7 @@ export async function getOrUpdateLiveSnapshot(uid) {
     };
 
     await setDoc(snapshotRef, fullSnapshot);
+    console.log("the full snap is",fullSnapshot)
     return fullSnapshot;
   } catch (err) {
     console.error("Failed to get or update live snapshot:", err.message);
