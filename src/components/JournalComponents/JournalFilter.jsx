@@ -39,7 +39,6 @@ export default function JournalFilter({
     setFilterApplied(true);
     setOpen(false);
   };
-  console.log("im filter, the filters i got are", filters);
   const handleClear = () => {
     onChange("ticker", "");
     onChange("type", "");

@@ -2,9 +2,6 @@ import {
   doc,
   getDoc,
   collection,
-  getDocs,
-  query,
-  where,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import getOrGenerateSnapshot from "./snapshot/getOrGenerateSnapshot";
@@ -33,21 +30,16 @@ function unitPriceFromLongPos(pos) {
   return shares > 0 ? mv / shares : 0;
 }
 
-/** Helpers to read v2 (fallback to legacy) */
-const getLongMap = (snap) => snap?.longPositions || snap?.positions || {};
+/** v2-only helpers (NO legacy fallback) */
+const getLongMap = (snap) => snap?.longPositions || {};
 const getShortMap = (snap) => snap?.shortPositions || {};
 const getUnrealizedNet = (snap) =>
-  Number(
-    snap?.totals?.unrealizedPLNet ??
-      snap?.unrealizedPL /* legacy, may be long-only */
-  ) || 0;
+  Number(snap?.totals?.unrealizedPLNet ?? 0) || 0;
+
 const getTotalCostBasisLong = (snap) =>
-  Number(
-    snap?.totalCostBasis ??
-      Object.values(getLongMap(snap)).reduce(
-        (s, p) => s + Number(p?.costBasis ?? 0),
-        0
-      )
+  Object.values(getLongMap(snap)).reduce(
+    (s, p) => s + Number(p?.costBasis ?? 0),
+    0
   ) || 0;
 
 /** YYYY-MM-DD in America/New_York */
@@ -77,6 +69,7 @@ function yesterdayStrET() {
   todayET.setDate(todayET.getDate() - 1);
   return formatETDate(todayET);
 }
+
 /** Format a Date as YYYY-MM-DD using UTC fields (no tz shifts) */
 function formatYMDUTC(dt) {
   const y = dt.getUTCFullYear();
@@ -93,7 +86,7 @@ function addDaysET(yyyyMmDd, delta) {
   return formatYMDUTC(dt); // format in UTC (no ET re-interpretation)
 }
 
-/** Load a snapshot for dateStr; if missing, generate; lazily fix zero prices */
+/** Load a snapshot for dateStr; if missing, generate; lazily fix zero prices (v2 only) */
 async function loadSnapshotFixed(uid, dateStr) {
   const ref = doc(db, "users", uid, "dailySnapshots", dateStr);
   let snapDoc = await getDoc(ref);
@@ -101,34 +94,27 @@ async function loadSnapshotFixed(uid, dateStr) {
     ? snapDoc.data()
     : await getOrGenerateSnapshot(dateStr);
 
-  // v2: fix zeros across long & short maps
-  const tickersWithZeroV2 = [
-    ...Object.entries(getLongMap(data))
-      .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
-      .map(([tk]) => tk),
-    ...Object.entries(getShortMap(data))
-      .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
-      .map(([tk]) => tk),
-  ];
+  // Collect zero-price tickers by direction (v2 only)
+  const zerosLong = Object.entries(getLongMap(data))
+    .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
+    .map(([tk]) => tk);
 
-  if (tickersWithZeroV2.length) {
-    for (const ticker of tickersWithZeroV2) {
-      await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr });
+  const zerosShort = Object.entries(getShortMap(data))
+    .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
+    .map(([tk]) => tk);
+
+  if (zerosLong.length || zerosShort.length) {
+    // Fix longs
+    for (const ticker of zerosLong) {
+      await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr, direction: "long" });
     }
+    // Fix shorts
+    for (const ticker of zerosShort) {
+      await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr, direction: "short" });
+    }
+    // Reload after fixes
     const fixed = await getDoc(ref);
     if (fixed.exists()) data = fixed.data();
-  } else if (data?.positions) {
-    // legacy fallback
-    const tickersWithZero = Object.entries(data.positions)
-      .filter(([_, p]) => Number(p?.priceAtSnapshot ?? 0) === 0)
-      .map(([ticker]) => ticker);
-    if (tickersWithZero.length) {
-      for (const ticker of tickersWithZero) {
-        await lazyFixSnapshotPrice({ userId: uid, ticker, date: dateStr });
-      }
-      const fixed = await getDoc(ref);
-      if (fixed.exists()) data = fixed.data();
-    }
   }
 
   return data;
@@ -292,7 +278,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
     const pastUnrealized = getUnrealizedNet(pastSnap || {});
     const denomPastCostBasis = getTotalCostBasisLong(pastSnap || {});
 
-    // realized diff (same approach you had)
+    // realized diff
     let realizedSum = 0;
     try {
       const realizedRef = collection(db, "users", uid, "realizedPLByDate");

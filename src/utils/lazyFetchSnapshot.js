@@ -3,80 +3,108 @@ import { db } from "../firebase";
 import fetchHistoricalPrices from "./prices/fetchHistoricalPrices";
 
 /**
- * Ensures priceAtSnapshot is valid for a given ticker on a given date.
- * Returns the updated price, or null if still unavailable.
+ * Ensures priceAtSnapshot is valid for a given ticker on a given date (v2 only).
+ * - direction: "long" | "short"  (required)
+ * Returns the updated price, or null if still unavailable / nothing to fix.
  */
-export async function lazyFixSnapshotPrice({ userId, ticker, date }) {
-  console.log("🔧 fixing", ticker, "at snapshot date", date);
+export async function lazyFixSnapshotPrice({
+  userId,
+  ticker,
+  date,
+  direction,
+}) {
+  if (!userId || !ticker || !date || (direction !== "long" && direction !== "short")) {
+    console.warn("lazyFixSnapshotPrice: missing/invalid args", {
+      userId, ticker, date, direction
+    });
+    return null;
+  }
 
   const snapRef = doc(db, "users", userId, "dailySnapshots", date);
   const snapSnap = await getDoc(snapRef);
   if (!snapSnap.exists()) return null;
 
-  const data = snapSnap.data();
-  const pos = data.positions?.[ticker];
-  if (!pos || pos.priceAtSnapshot > 0) return pos?.priceAtSnapshot ?? null;
+  const data = snapSnap.data() || {};
+  const key = direction === "long" ? "longPositions" : "shortPositions";
+  const otherKey = direction === "long" ? "shortPositions" : "longPositions";
 
-  // ✅ Treat date string as UTC to avoid time zone drift
-  // console.log("input date", date);
-  const dateStr = date; // trust the original date string
-  const result = await fetchHistoricalPrices([ticker], dateStr, dateStr);
-  const price = result?.[ticker]?.priceMap?.[dateStr] ?? 0;
+  const book = { ...(data[key] || {}) };
+  const otherBook = data[otherKey] || {};
 
-  // 🧠 price is 0 — refetch it
+  const pos = book[ticker];
+  if (!pos) return null;                       // nothing to fix on this side
+  if (Number(pos.priceAtSnapshot ?? 0) > 0) {  // already has a valid price
+    return Number(pos.priceAtSnapshot);
+  }
 
-  console.log("target date is", dateStr);
-  console.log("✅ fetched priceMap:", result);
-  console.log("📅 resolved dateStr:", dateStr);
-  console.log("📈 fetched price:", price);
+  // Use the provided YYYY-MM-DD string as-is (no tz shifts)
+  const dateStr = date;
+  const hist = await fetchHistoricalPrices([ticker], dateStr, dateStr);
+  const price = Number(hist?.[ticker]?.priceMap?.[dateStr] ?? 0);
+  if (!(price > 0)) return null; // still no fix
 
-  if (price <= 0) return null; // still no fix
+  // Recompute derived fields for THIS position
+  const shares = Number(pos.shares ?? 0);
+  const fifoStack = Array.isArray(pos.fifoStack) ? pos.fifoStack : [];
 
-  // ✅ Patch the position
-  const shares = pos.shares ?? 0;
-
-  const fifoStack = pos.fifoStack ?? [];
   const costBasis =
-    pos.costBasis ??
+    Number(pos.costBasis ?? 0) ||
     fifoStack.reduce(
-      (sum, lot) => sum + (lot.shares ?? 0) * (lot.price ?? 0),
+      (sum, lot) =>
+        sum + Number(lot?.shares ?? 0) * Number(lot?.price ?? 0),
       0
     );
 
-  const marketValue = price * shares;
+  const marketValue = shares * price;
   const unrealizedPL = marketValue - costBasis;
 
-  const updatedPositions = { ...data.positions };
-  updatedPositions[ticker] = {
-    ...pos,
-    costBasis,
-    priceAtSnapshot: price,
-    marketValue,
-    unrealizedPL,
+  // Update the side map with the fixed position
+  const updatedBook = {
+    ...book,
+    [ticker]: {
+      ...pos,
+      costBasis,
+      priceAtSnapshot: price,
+      marketValue,
+      unrealizedPL,
+    },
   };
 
-  // Recalculate snapshot totals
-  let totalMarketValue = 0;
-  let totalCostBasis = 0;
-  let totalPL = 0;
+  // --- Re-aggregate totals across BOTH sides (using existing other side as-is) ---
 
-  for (const p of Object.values(updatedPositions)) {
-    totalMarketValue += p.marketValue ?? 0;
-    totalCostBasis += p.costBasis ?? 0;
-    totalPL += p.unrealizedPL ?? 0;
-  }
+  const sumSide = (sideMap = {}) => {
+    let mv = 0, cb = 0, pl = 0;
+    for (const p of Object.values(sideMap)) {
+      mv += Number(p?.marketValue ?? 0);
+      cb += Number(p?.costBasis ?? 0);
+      pl += Number(p?.unrealizedPL ?? 0);
+    }
+    return { mv, cb, pl };
+  };
 
-  const totalAssets = totalMarketValue ;
-  const totalPLPercent = totalCostBasis > 0 ? totalPL / totalCostBasis : 0;
+  const longsAgg  = direction === "long"  ? sumSide(updatedBook) : sumSide(data.longPositions);
+  const shortsAgg = direction === "short" ? sumSide(updatedBook) : sumSide(data.shortPositions);
 
-  await updateDoc(snapRef, {
-    positions: updatedPositions,
-    totalMarketValue,
-    totalCostBasis,
-    unrealizedPL: totalPL,
-    totalAssets,
-    totalPLPercent,
-  });
+  const totals = {
+    marketValueLong: longsAgg.mv,
+    marketValueShort: shortsAgg.mv,
+    costBasisLong: longsAgg.cb,
+    costBasisShort: shortsAgg.cb,
+    unrealizedPLLong: longsAgg.pl,
+    unrealizedPLShort: shortsAgg.pl,
+    marketValueNet: longsAgg.mv + shortsAgg.mv,
+    costBasisNet: longsAgg.cb + shortsAgg.cb,
+    unrealizedPLNet: longsAgg.pl + shortsAgg.pl,
+    // Keep a simple percent; downstream readers should pick the denominator they want.
+    totalPLPercent: (longsAgg.cb > 0 ? longsAgg.pl / longsAgg.cb : 0),
+  };
 
+  // Build the update payload
+  const updatePayload = {
+    totals,
+    [key]: updatedBook,
+  };
+
+  await updateDoc(snapRef, updatePayload);
   return price;
 }
