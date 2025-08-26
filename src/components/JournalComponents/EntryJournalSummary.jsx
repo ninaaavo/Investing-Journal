@@ -213,7 +213,7 @@ export default function EntryJournalSummary({ selected }) {
           exitDateISO={exitDateISO}          // omit if still open
           exitEvents={selected.exitEvents || []}
           showEntryDot
-          height={260}
+          isLong = {direction == "long"}
         />
       </div>
     </div>

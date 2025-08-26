@@ -180,7 +180,6 @@ export default function ExitJournalSummary({ selected }) {
             exitDateISO={exitDateISO} // sell date
             entryEvents={selected.entryEvents || []} // dots + tooltip show "Buy ..."
             showEntryDot={true}
-            height={240}
           />
         ) : (
           <div className="bg-gray-100 h-48 rounded-md flex items-center justify-center text-gray-400 text-sm">

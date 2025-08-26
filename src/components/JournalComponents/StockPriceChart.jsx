@@ -23,6 +23,7 @@ import { toETDateOnly } from "../../utils/toETDateOnly";
  *  - variant        ("entry" | "exit", default "entry")
  *  - showEntryDot   (bool, default true)     // highlight first entry date's close
  *  - height         (number, default 240)
+ *  - isLong         (boolean, default true)
  */
 export default function StockPriceChart({
   ticker,
@@ -32,8 +33,19 @@ export default function StockPriceChart({
   entryEvents = [],
   variant = "entry",
   showEntryDot = true,
-  height = 240,
+  height = 160,
+  isLong = true,
 }) {
+  function Placeholder({ children }) {
+    return (
+      <div
+        className="w-full rounded-xl border bg-gray-50 flex items-center justify-center text-sm text-gray-500"
+        style={{ height: `calc(${height}px + 30px)` }}
+      >
+        {children || "Chart"}
+      </div>
+    );
+  }
   const { user } = useUser();
 
   const [series, setSeries] = useState(null);
@@ -71,7 +83,8 @@ export default function StockPriceChart({
         uid: user.uid,
         ticker,
         startDateISO: entryDateISO,
-        endDateISO: variant === "exit" ? exitDateISO : (exitDateISO || null),
+        endDateISO: variant === "exit" ? exitDateISO : exitDateISO || null,
+        isLong
       });
       if (alive) {
         setSeries(s);
@@ -92,12 +105,16 @@ export default function StockPriceChart({
   }, [series]);
 
   const entryY = useMemo(
-    () => (seriesByDate.has(entryDateISO) ? seriesByDate.get(entryDateISO).close : undefined),
+    () =>
+      seriesByDate.has(entryDateISO)
+        ? seriesByDate.get(entryDateISO).close
+        : undefined,
     [seriesByDate, entryDateISO]
   );
 
   // Choose which events to plot as dots
-  const rawEventsForDots = variant === "exit" ? normalizedBuys : normalizedSells;
+  const rawEventsForDots =
+    variant === "exit" ? normalizedBuys : normalizedSells;
 
   // Keep only those events that fall on dates present in the series
   const eventDots = useMemo(() => {
@@ -105,28 +122,45 @@ export default function StockPriceChart({
     return rawEventsForDots.filter((ev) => seriesByDate.has(ev.date));
   }, [rawEventsForDots, series, seriesByDate]);
 
-  if (!ticker || !entryDateISO) return <Placeholder>Missing ticker/entry date</Placeholder>;
+  if (!ticker || !entryDateISO)
+    return <Placeholder>Missing ticker/entry date</Placeholder>;
   if (variant === "exit" && !exitDateISO)
     return <Placeholder>Missing sell date for exit chart</Placeholder>;
   if (loading || !series) return <Placeholder>Loading chart…</Placeholder>;
-  if (series.length === 0) return <Placeholder>No price data found for {ticker}</Placeholder>;
+  if (series.length === 0)
+    return <Placeholder>No price data found for {ticker}</Placeholder>;
 
   const tooltipMode = variant === "exit" ? "buy" : "sell";
   const title = variant === "exit" ? "Exit Price Chart" : "Entry Price Chart";
-console.log("im loading stock price, w events " + series)
+  console.log("im loading stock price, w events " + series);
   return (
     <div className="w-full rounded-xl border bg-white">
       <div className="px-3 pt-2 text-sm text-gray-600">{title}</div>
       <div style={{ width: "100%", height }}>
         <ResponsiveContainer>
-          <LineChart data={series} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+          <LineChart
+            data={series}
+            margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
+          >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={24} />
-            <YAxis tick={{ fontSize: 11 }} width={56} domain={["auto", "auto"]} />
-            <Tooltip content={<ChartTooltip mode={tooltipMode} events={eventDots} />} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              width={56}
+              domain={["auto", "auto"]}
+            />
+            <Tooltip
+              content={<ChartTooltip mode={tooltipMode} events={eventDots} />}
+            />
 
             {/* PRICE LINE (close) */}
-            <Line type="monotone" dataKey="close" dot={false} strokeWidth={2} name="Close" />
+            <Line
+              type="monotone"
+              dataKey="close"
+              dot={false}
+              strokeWidth={2}
+              name="Close"
+            />
 
             {/* ENTRY DOT (optional) at first entry date's close */}
             {showEntryDot && typeof entryY === "number" && (
@@ -153,14 +187,6 @@ console.log("im loading stock price, w events " + series)
   );
 }
 
-function Placeholder({ children }) {
-  return (
-    <div className="w-full rounded-xl border bg-gray-50 h-[240px] flex items-center justify-center text-sm text-gray-500">
-      {children || "Chart"}
-    </div>
-  );
-}
-
 /** Tooltip shows close and BUY/SELL events on the hovered date */
 function ChartTooltip({ active, payload, label, events, mode }) {
   if (!active || !payload || payload.length === 0) return null;
@@ -179,7 +205,8 @@ function ChartTooltip({ active, payload, label, events, mode }) {
         <div className="mt-1 space-y-1">
           {eventsToday.map((e, idx) => (
             <div key={idx}>
-              {verb} {e.shares} {e.shares === 1 ? "share" : "shares"} @ ${Number(e.price).toFixed(2)}
+              {verb} {e.shares} {e.shares === 1 ? "share" : "shares"} @ $
+              {Number(e.price).toFixed(2)}
             </div>
           ))}
         </div>

@@ -10,7 +10,7 @@ function toETDateOnly(input) {
 /** Add days to an ET date string safely (use UTC noon to avoid TZ rollback) */
 function addDaysET(yyyyMmDd, delta) {
   const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  // FIX: construct at 12:00 UTC so ET formatting stays on the same calendar day
+  // Construct at 12:00 UTC so ET formatting stays on the same calendar day
   const dt = new Date(Date.UTC(y, m - 1, d, 12));
   dt.setUTCDate(dt.getUTCDate() + delta);
   return toETDateOnly(dt);
@@ -26,6 +26,7 @@ export async function fetchTickerPriceSeries({
   startDateISO,      // entry date (YYYY-MM-DD, ET)
   endDateISO = null, // sell date if closed (YYYY-MM-DD, ET); optional
   capDays = 2000,
+  isLong,            // boolean | undefined. If undefined, auto-detect side per day.
 }) {
   if (!uid || !ticker || !startDateISO) return [];
 
@@ -33,7 +34,7 @@ export async function fetchTickerPriceSeries({
   let cursor = startDateISO;
   let stopAuto = false;
 
-  // FIX: compute "today ET" once
+  // compute "today ET" once
   const todayET = toETDateOnly(new Date());
 
   for (let i = 0; i < capDays; i++) {
@@ -47,15 +48,40 @@ export async function fetchTickerPriceSeries({
 
     if (snapDoc.exists()) {
       const data = snapDoc.data() || {};
-      const pos = (data.positions || {})[ticker];
 
-      if (!pos || Number(pos.shares ?? 0) <= 0) {
-        // position disappeared → stop at the previous day
+      // Choose which book to read from:
+      // - If isLong is provided, use it
+      // - Otherwise, auto-detect by looking for the ticker in longPositions first, then shortPositions
+      const longBook = data.longPositions || {};
+      const shortBook = data.shortPositions || {};
+
+      let book;
+      if (typeof isLong === "boolean") {
+        book = isLong ? longBook : shortBook;
+      } else {
+        book = (longBook && longBook[ticker]) ? longBook : shortBook;
+      }
+
+      const pos = (book || {})[ticker];
+
+      // Normalize shares; handle different schemas and sign conventions
+      const rawShares =
+        (pos && (pos.shares ?? pos.absoluteShares ?? pos.qty ?? pos.quantity ?? pos.netShares)) ?? 0;
+
+      // If it’s a short book and shares might be negative, compare using absolute value.
+      const sharesAbs = Math.abs(Number(rawShares) || 0);
+
+      if (!pos || sharesAbs <= 0) {
+        // position disappeared → stop at the previous day if there’s no explicit endDate
         if (!endDateISO) stopAuto = true;
       } else {
-        const px = Number(pos.priceAtSnapshot ?? 0);
+        // Prefer priceAtSnapshot; fall back to a few common fields if needed
+        const px = Number(
+          pos.priceAtSnapshot ?? pos.mark ?? pos.close ?? pos.last ?? 0
+        );
+
         if (px > 0) {
-          // FIX: guard against accidental duplicates
+          // guard against accidental duplicates
           if (!series.length || series[series.length - 1].date !== cursor) {
             series.push({ date: cursor, close: px });
           }
