@@ -1,5 +1,6 @@
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../firebase";
+import { lazyFixSnapshotPrice } from "../lazyFetchSnapshot";
 
 /** YYYY-MM-DD in Eastern Time (accepts Date or Timestamp or string) */
 function toETDateOnly(input) {
@@ -28,6 +29,8 @@ export async function fetchTickerPriceSeries({
   capDays = 2000,
   isLong,            // boolean | undefined. If undefined, auto-detect side per day.
 }) {
+
+  console.log("im getting called w ticker", ticker, "start date is", startDateISO, "end date is", endDateISO, "isLong is", isLong)
   if (!uid || !ticker || !startDateISO) return [];
 
   const series = [];
@@ -80,6 +83,8 @@ export async function fetchTickerPriceSeries({
           pos.priceAtSnapshot ?? pos.mark ?? pos.close ?? pos.last ?? 0
         );
 
+        if (px === 0) await lazyFixSnapshotPrice({ userId: uid, ticker, date: data.date, direction: isLong? "long" : "short" });
+        
         if (px > 0) {
           // guard against accidental duplicates
           if (!series.length || series[series.length - 1].date !== cursor) {
