@@ -317,111 +317,88 @@ export default function InputForm() {
         });
       }
 
-      // 🔸 Upsert currentPositions (LONG vs SHORT)
-      const positionQuery = collection(
-        db,
-        "users",
-        user.uid,
-        "currentPositions"
-      );
-      const snapshot = await getDocs(positionQuery);
-      const existing = snapshot.docs.find(
-        (d) =>
-          d.data().ticker.toUpperCase() === form.ticker.toUpperCase() &&
-          (d.data().direction || "").toLowerCase() ===
-            (form.direction || "").toLowerCase()
-      );
+  // 🔸 Upsert currentPositions (LONG & SHORT share same layout)
+const positionQuery = collection(db, "users", user.uid, "currentPositions");
+const snapshot = await getDocs(positionQuery);
 
-      if (existing) {
-        const data = existing.data();
-        const prevShares = Number(data.shares) || 0;
-        const addShares = Number(form.shares) || 0;
+const wantedTicker = (form.ticker || "").toUpperCase();
+const wantedDir = (form.direction || "").toLowerCase(); // 'long' | 'short'
 
-        if (isShort) {
-          // Weighted avg on avgShortPrice (also mirror to averagePrice for legacy)
-          const prevAvg = Number(data.avgShortPrice ?? data.averagePrice ?? 0);
-          const newShares = prevShares + addShares;
-          const totalVal =
-            prevShares * prevAvg + addShares * Number(form.entryPrice);
-          const newAvg = newShares > 0 ? totalVal / newShares : 0;
+const existing = snapshot.docs.find(
+  (d) =>
+    (d.data().ticker || "").toUpperCase() === wantedTicker &&
+    (d.data().direction || "").toLowerCase() === wantedDir
+);
 
-          await updateDoc(
-            doc(db, "users", user.uid, "currentPositions", existing.id),
-            {
-              shares: newShares,
-              avgShortPrice: newAvg,
-              averagePrice: newAvg, // legacy compatibility
-              lastUpdated: serverTimestamp(),
-            }
-          );
-        } else {
-          // LONG: maintain FIFO + averagePrice
-          const totalShares = prevShares + addShares;
-          const totalCost =
-            Number(data.averagePrice || 0) * prevShares +
-            Number(form.entryPrice) * addShares;
-          const newAvgPrice = totalCost / (totalShares || 1);
+const addShares = Number(form.shares) || 0;
+const addPrice = Number(form.entryPrice) || 0;
 
-          const fifoStack = Array.isArray(data.fifoStack)
-            ? [...data.fifoStack]
-            : [];
-          fifoStack.push({
-            entryId: journalRef.id,
-            sharesRemaining: addShares,
-            entryPrice: Number(form.entryPrice),
-            entryTimestamp: form.entryTimestamp,
-          });
+if (existing) {
+  const data = existing.data();
 
-          await updateDoc(
-            doc(db, "users", user.uid, "currentPositions", existing.id),
-            {
-              shares: totalShares,
-              averagePrice: newAvgPrice,
-              fifoStack,
-              lastUpdated: serverTimestamp(),
-            }
-          );
-        }
-      } else {
-        // Create new position doc
-        const base = {
-          ticker: form.ticker.toUpperCase(),
-          companyName: form.companyName,
-          shares: Number(form.shares),
-          entryDate: form.entryDate,
-          direction: form.direction, // 'long' | 'short'
-          journalEntryId: journalRef.id,
-          createdAt: serverTimestamp(),
-        };
+  const prevShares = Number(data.shares) || 0;
+  const prevAvg =
+    Number(data.averagePrice ?? data.avgShortPrice ?? 0) || 0;
 
-        if (isShort) {
-          await setDoc(
-            doc(db, "users", user.uid, "currentPositions", journalRef.id),
-            {
-              ...base,
-              avgShortPrice: Number(form.entryPrice),
-              averagePrice: Number(form.entryPrice), // legacy compatibility
-              // no fifoStack for shorts
-            }
-          );
-        } else {
-          await setDoc(
-            doc(db, "users", user.uid, "currentPositions", journalRef.id),
-            {
-              ...base,
-              averagePrice: Number(form.entryPrice),
-              fifoStack: [
-                {
-                  entryId: journalRef.id,
-                  sharesRemaining: Number(form.shares),
-                  entryPrice: Number(form.entryPrice),
-                  entryTimestamp: form.entryTimestamp,
-                },
-              ],
-            }
-          );
-        }
-      }
+  // New weighted average (same math for long/short)
+  const newShares = prevShares + addShares;
+  const totalVal = prevShares * prevAvg + addShares * addPrice;
+  const newAvg = newShares > 0 ? totalVal / newShares : 0;
+
+  // Ensure fifoStack exists and push new lot
+  const fifoStack = Array.isArray(data.fifoStack) ? [...data.fifoStack] : [];
+  fifoStack.push({
+    entryId: journalRef.id,
+    sharesRemaining: addShares,
+    entryPrice: addPrice,
+    entryTimestamp: form.entryTimestamp, // timestamp or millis—same as long
+  });
+
+  const updatePayload = {
+    shares: newShares,
+    averagePrice: newAvg,
+    fifoStack,
+    lastUpdated: serverTimestamp(),
+  };
+
+  // For legacy readers that look at avgShortPrice, mirror when short
+  if (isShort) updatePayload.avgShortPrice = newAvg;
+
+  await updateDoc(
+    doc(db, "users", user.uid, "currentPositions", existing.id),
+    updatePayload
+  );
+} else {
+  // Create new position doc with unified layout
+  const base = {
+    ticker: wantedTicker,
+    companyName: form.companyName,
+    shares: addShares,
+    entryDate: form.entryDate,
+    direction: wantedDir, // 'long' | 'short'
+    journalEntryId: journalRef.id,
+    createdAt: serverTimestamp(),
+  };
+
+  const docId = journalRef.id; // keep your current ID choice
+  const newDoc = {
+    ...base,
+    averagePrice: addPrice,
+    fifoStack: [
+      {
+        entryId: journalRef.id,
+        sharesRemaining: addShares,
+        entryPrice: addPrice,
+        entryTimestamp: form.entryTimestamp,
+      },
+    ],
+  };
+
+  // Legacy mirror for shorts
+  if (isShort) newDoc.avgShortPrice = addPrice;
+
+  await setDoc(doc(db, "users", user.uid, "currentPositions", docId), newDoc);
+}
 
       // Update preferredChecklist weights
       const updatedPreferredChecklist = Object.fromEntries(
