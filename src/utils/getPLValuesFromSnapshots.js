@@ -236,6 +236,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
 
   const uid = user.uid;
   const todayStr = todayStrET();
+
   const timeFrames = {
     "1D": 1,
     "1W": 7,
@@ -245,7 +246,16 @@ export async function getTotalPLBreakdown(todaySnapshot) {
     All: null,
   };
 
-  // Need firstSnapshotDate for All
+  // helper: safe reads
+  const getUnrealized = (snap) => Number(getUnrealizedNet(snap || {})) || 0;
+  const getCostBasis = (snap) => Number(getTotalCostBasisLong(snap || {})) || 0;
+  const getRealizedCum = (snap) => Number(snap?.totals?.realizedPL || 0) || 0;
+
+  // we already have live "today"
+  const todayUnrealized = getUnrealized(todaySnapshot);
+  const todayRealizedCum = getRealizedCum(todaySnapshot);
+
+  // Need firstSnapshotDate for "All"
   let firstDateStr = null;
   try {
     const uDoc = await getDoc(doc(db, "users", uid));
@@ -253,7 +263,6 @@ export async function getTotalPLBreakdown(todaySnapshot) {
   } catch {}
 
   const results = {};
-  const todayUnrealized = getUnrealizedNet(todaySnapshot);
 
   for (const [label, days] of Object.entries(timeFrames)) {
     let pastStr;
@@ -267,7 +276,7 @@ export async function getTotalPLBreakdown(todaySnapshot) {
       pastStr = addDaysET(todayStr, -days);
     }
 
-    // past snapshot (for unrealized baseline AND percent denominator)
+    // Load the baseline snapshot at pastStr
     let pastSnap = null;
     try {
       pastSnap = await loadSnapshotFixed(uid, pastStr);
@@ -275,33 +284,18 @@ export async function getTotalPLBreakdown(todaySnapshot) {
       console.warn(`Failed loading past snapshot ${pastStr}:`, e);
     }
 
-    const pastUnrealized = getUnrealizedNet(pastSnap || {});
-    const denomPastCostBasis = getTotalCostBasisLong(pastSnap || {});
+    const pastUnrealized = getUnrealized(pastSnap);
+    const pastRealizedCum = getRealizedCum(pastSnap);
+    const denomPastCostBasis = getCostBasis(pastSnap);
 
-    // realized diff
-    let realizedSum = 0;
-    try {
-      const realizedRef = collection(db, "users", uid, "realizedPLByDate");
+    // ΔUnrealized + ΔRealized (both cumulative at their dates)
+    const totalPL =
+      (todayUnrealized - pastUnrealized) +
+      (todayRealizedCum - pastRealizedCum);
 
-      const todayDoc = await getDoc(doc(realizedRef, todayStr));
-      const todayVal = Number(todayDoc.data()?.realizedPL ?? 0);
-
-      const pastDoc = await getDoc(doc(realizedRef, pastStr));
-      const pastVal = Number(pastDoc.data()?.realizedPL ?? 0);
-
-      if (Number.isFinite(todayVal) && Number.isFinite(pastVal)) {
-        realizedSum = todayVal - pastVal;
-      }
-    } catch (e) {
-      console.warn(
-        `Failed calculating realized P/L diff from ${pastStr} -> ${todayStr}:`,
-        e
-      );
-    }
-
-    const totalPL = todayUnrealized - pastUnrealized + realizedSum;
     results[label] = formatPLAndPct(totalPL, denomPastCostBasis);
   }
 
   return results;
 }
+
