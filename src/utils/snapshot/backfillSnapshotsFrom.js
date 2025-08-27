@@ -170,12 +170,157 @@ export async function backfillSnapshotsFrom({
       }
 
       if (!isShortExit) {
-        // ... (your existing LONG reduction code)
-        // be sure any final updateDoc merges with the above fields:
-        // await updateDoc(snapRef, { longPositions, shortPositions, totals, ...legacy })
+        // ---- Reduce LONG shares with FIFO consumption ----
+        const pos = longPositions[ticker];
+        const origShares = N(pos.shares || 0);
+        const take = Math.min(reduceShares, origShares);
+        if (origShares <= 0 || take <= 0) {
+          cursor = addDays(cursor, 1);
+          continue;
+        }
+
+        const remainShares = origShares - take;
+
+        const oldMV = N(pos.marketValue || 0);
+        const oldCB = N(pos.costBasis || 0);
+        const oldUPL = N(pos.unrealizedPL ?? oldMV - oldCB);
+
+        // Prefer exact CB change via FIFO if we have a stack; otherwise fallback to proportional
+        const hasStack =
+          Array.isArray(pos.fifoStack) && pos.fifoStack.length > 0;
+
+        let newFifoStack = hasStack
+          ? pos.fifoStack.map((l) => ({
+              shares: N(l.shares),
+              price: N(l.price),
+            }))
+          : [];
+        let removedCost = 0;
+
+        if (hasStack) {
+          const {
+            newStack,
+            removedShares,
+            removedCost: rc,
+          } = consumeFromFifo(newFifoStack, take);
+          // In normal conditions, removedShares === take
+          removedCost = rc;
+          newFifoStack = newStack;
+        }
+
+        // Scale MV linearly by shares ratio (no need to fetch price)
+        const ratio = remainShares > 0 ? remainShares / origShares : 0;
+        const newMV = oldMV * ratio;
+
+        // Exact CB from FIFO if available; else proportional CB scaling
+        const newCB = hasStack
+          ? Math.max(0, oldCB - removedCost)
+          : oldCB * ratio;
+
+        // Recompute UPL as MV - CB for accuracy
+        const newUPL = newMV - newCB;
+
+        // Update totals (long side & net)
+        const dMV = newMV - oldMV;
+        const dCB = newCB - oldCB;
+        const dUPLLong = newUPL - oldUPL;
+
+        totals.totalLongMarketValue = N(totals.totalLongMarketValue || 0) + dMV;
+        totals.unrealizedPLLong = N(totals.unrealizedPLLong || 0) + dUPLLong;
+        totals.unrealizedPLNet = N(totals.unrealizedPLNet || 0) + dUPLLong;
+        totals.equityNoCash =
+          N(totals.totalLongMarketValue || 0) -
+          N(totals.totalShortLiability || 0);
+        totals.grossExposure =
+          N(totals.totalLongMarketValue || 0) +
+          N(totals.totalShortLiability || 0);
+
+        if (remainShares === 0) {
+          delete longPositions[ticker];
+        } else {
+          longPositions[ticker] = {
+            ...pos,
+            shares: remainShares,
+            // keep the last known per-day priceAtSnapshot (we didn't fetch)
+            marketValue: newMV,
+            costBasis: newCB,
+            unrealizedPL: newUPL,
+            // Write the updated FIFO stack if we had one; otherwise leave as-is or omit
+            ...(hasStack ? { fifoStack: newFifoStack } : {}),
+          };
+        }
+
+        // Legacy compatibility fields
+        const newTotalMV = N(data.totalMarketValue || 0) + dMV;
+        const newTotalCB = N(data.totalCostBasis || 0) + dCB;
+        const newUPLTotal = N(data.unrealizedPL || 0) + dUPLLong; // long delta only
+        const totalPLPercent = newTotalCB > 0 ? newUPLTotal / newTotalCB : 0;
+
+        await updateDoc(snapRef, {
+          longPositions,
+          shortPositions,
+          totals,
+          // legacy
+          totalMarketValue: newTotalMV,
+          totalCostBasis: newTotalCB,
+          unrealizedPL: newUPLTotal,
+          totalPLPercent,
+        });
+
+        await removeDividendFromUserDay(userId, dateStr, ticker, take);
       } else {
-        // ... (your existing SHORT cover code)
-        // await updateDoc(snapRef, { longPositions, shortPositions, totals, ...legacy })
+        // ---- Reduce SHORT shares (COVER) ----
+        const pos = shortPositions[ticker];
+        const origShares = N(pos.shares || 0);
+        const take = Math.min(reduceShares, origShares);
+        if (origShares <= 0 || take <= 0) {
+          cursor = addDays(cursor, 1);
+          continue;
+        }
+
+        const remain = origShares - take;
+
+        const oldLiab = N(pos.liabilityAtSnapshot || 0);
+        const oldUPL = N(pos.unrealizedPL || 0);
+
+        const ratio = remain > 0 ? remain / origShares : 0;
+
+        const newLiab = oldLiab * ratio;
+        const newUPLShort = oldUPL * ratio;
+
+        const dLiab = newLiab - oldLiab;
+        const dUPLShort = newUPLShort - oldUPL;
+
+        totals.totalShortLiability = N(totals.totalShortLiability || 0) + dLiab;
+        totals.unrealizedPLShort = N(totals.unrealizedPLShort || 0) + dUPLShort;
+        totals.unrealizedPLNet = N(totals.unrealizedPLNet || 0) + dUPLShort;
+        totals.equityNoCash =
+          N(totals.totalLongMarketValue || 0) -
+          N(totals.totalShortLiability || 0);
+        totals.grossExposure =
+          N(totals.totalLongMarketValue || 0) +
+          N(totals.totalShortLiability || 0);
+
+        if (remain === 0) {
+          delete shortPositions[ticker];
+        } else {
+          shortPositions[ticker] = {
+            ...pos,
+            shares: remain,
+            liabilityAtSnapshot: newLiab,
+            unrealizedPL: newUPLShort,
+          };
+        }
+
+        // Legacy: treat unrealizedPL net as long+short; long side unchanged here
+        const newUnrealizedNet = N(data.unrealizedPL || 0) + dUPLShort;
+        await updateDoc(snapRef, {
+          longPositions,
+          shortPositions,
+          totals,
+          // legacy
+          unrealizedPL: newUnrealizedNet,
+        });
       }
 
       cursor = addDays(cursor, 1);
@@ -225,6 +370,7 @@ export async function backfillSnapshotsFrom({
       unrealizedPLLong: 0,
       unrealizedPLShort: 0,
       unrealizedPLNet: 0,
+      realizedPL:0
     };
 
     const base = snapDoc.exists()
