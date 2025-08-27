@@ -3,6 +3,7 @@ import fetchHistoricalPrices from "../prices/fetchHistoricalPrices";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { addDividendToUserDay } from "../dividends/addDividendToUserDay";
 import { db } from "../../firebase";
+import { computeCumulativeRealizedForDate } from "./computeCumulativeRealizedForDate";
 
 const N = (v) => Number.parseFloat(v || 0);
 
@@ -157,6 +158,10 @@ export default async function generateSnapshotRange({
         unrealizedPLLong,
         unrealizedPLShort,
         unrealizedPLNet,
+        realizedPL: await computeCumulativeRealizedForDate({
+          userId: userId,
+          dateISO: dateStr,
+        }),
       },
 
       // legacy

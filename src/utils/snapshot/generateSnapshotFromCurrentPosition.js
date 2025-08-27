@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { checkAndAddDividendsToUser } from "../dividends/checkAndAddDividendsToUser";
 import { addDividendToUserDay } from "../dividends/addDividendToUserDay";
+import { computeCumulativeRealizedForDate } from "./computeCumulativeRealizedForDate";
 
 const N = (v) => Number.parseFloat(v || 0);
 
@@ -133,7 +134,9 @@ export default async function generateSnapshotFromCurrentPosition({
         fifoStack,
       };
     } else {
-      const avgShortPrice = N(pos.avgShortPrice ?? pos.averagePrice ?? pos.avgPrice ?? 0);
+      const avgShortPrice = N(
+        pos.avgShortPrice ?? pos.averagePrice ?? pos.avgPrice ?? 0
+      );
       const liab = sharesAbs * price;
       const upl = (avgShortPrice - price) * sharesAbs;
 
@@ -177,12 +180,17 @@ export default async function generateSnapshotFromCurrentPosition({
     const prevDate = new Date(date);
     prevDate.setDate(prevDate.getDate() - 1);
     const prevStr = prevDate.toISOString().split("T")[0];
-    const prevSnapDoc = await getDoc(doc(db, "users", userId, "dailySnapshots", prevStr));
+    const prevSnapDoc = await getDoc(
+      doc(db, "users", userId, "dailySnapshots", prevStr)
+    );
     prevTotalDividend = prevSnapDoc.exists()
       ? N(prevSnapDoc.data()?.totalDividendReceived || 0)
       : 0;
   } catch (err) {
-    console.warn("Failed to read previous snapshot for dividend carry:", err?.message);
+    console.warn(
+      "Failed to read previous snapshot for dividend carry:",
+      err?.message
+    );
   }
 
   const totalDividendReceived = prevTotalDividend + todayDividend;
@@ -205,6 +213,10 @@ export default async function generateSnapshotFromCurrentPosition({
       unrealizedPLLong,
       unrealizedPLShort,
       unrealizedPLNet,
+      realizedPL: await computeCumulativeRealizedForDate({
+        userId: userId,
+        dateISO: dateStr,
+      }),
     },
 
     // Legacy fields

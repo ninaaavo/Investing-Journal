@@ -10,7 +10,27 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../../firebase";
 import generateSnapshotRange from "./generateSnapshotRange";
+import { computeCumulativeRealizedForDate } from "./computeCumulativeRealizedForDate";
 import generateSnapshotFromCurrentPosition from "./generateSnapshotFromCurrentPosition";
+
+// 👇 If you already have a cached-live getter, import it.
+// Adjust the path/name to your project. Fallback provided below.
+// import getCachedLiveSnapshot from "../live/getCachedLiveSnapshot";
+
+/**
+ * Optional fallback if you don't have a dedicated cached-live util:
+ * Tries to read a cache doc: users/{uid}/cache/liveSnapshot
+ * Return null if not found (we won't write anything here).
+ */
+async function getCachedLiveSnapshotFallback(uid) {
+  try {
+    const cacheRef = doc(db, "users", uid, "cache", "liveSnapshot");
+    const snap = await getDoc(cacheRef);
+    return snap.exists() ? snap.data() : null;
+  } catch {
+    return null;
+  }
+}
 
 export default async function getOrGenerateSnapshot(dateStr) {
   const user = auth.currentUser;
@@ -27,7 +47,35 @@ export default async function getOrGenerateSnapshot(dateStr) {
     const [Y, M, D] = s.split("-").map(Number);
     return new Date(Y, M - 1, D);
   };
+  const isSameLocalDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
   const dateObj = asLocal(dateStr);
+  const todayLocal = new Date(); // local tz "now"
+  const todayMidnight = new Date(
+    todayLocal.getFullYear(),
+    todayLocal.getMonth(),
+    todayLocal.getDate()
+  );
+
+  // ✅ If target is TODAY: return cached live snapshot and DO NOT write to dailySnapshots
+  if (isSameLocalDay(dateObj, todayMidnight)) {
+    // Prefer your project's real cached-live getter if you have one:
+    // const live = await getCachedLiveSnapshot({ userId: uid });
+    const live =
+      (await getCachedLiveSnapshotFallback(uid)) ??
+      // As an emergency fallback, compute from current positions but DON'T persist.
+      (await generateSnapshotFromCurrentPosition({
+        date: dateStr,
+        userId: uid,
+      }));
+
+    // Ensure it carries the requested date in case your cache stores "today"
+    // with a different date formatting or missing field.
+    return { ...live, date: dateStr };
+  }
 
   // Find latest snapshot before dateStr (same collection)
   const snapshotsRef = collection(db, "users", uid, colName);
@@ -55,6 +103,7 @@ export default async function getOrGenerateSnapshot(dateStr) {
       unrealizedPLLong: 0,
       unrealizedPLShort: 0,
       unrealizedPLNet: 0,
+      realizedPL: 0,
     },
     // legacy
     unrealizedPL: 0,
@@ -85,6 +134,10 @@ export default async function getOrGenerateSnapshot(dateStr) {
         unrealizedPLLong: prevData.unrealizedPL || 0,
         unrealizedPLShort: 0,
         unrealizedPLNet: prevData.unrealizedPL || 0,
+        realizedPL: await computeCumulativeRealizedForDate({
+          userId: uid,
+          dateISO: dateStr,
+        }),
       },
       unrealizedPL: prevData.unrealizedPL || 0,
       totalCostBasis: prevData.totalCostBasis || 0,
@@ -99,12 +152,12 @@ export default async function getOrGenerateSnapshot(dateStr) {
   }
 
   // If target is yesterday, let generateSnapshotFromCurrentPosition write that day
-  const today = new Date();
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
-  const isYesterday =
-    dateObj.getFullYear() === yesterday.getFullYear() &&
-    dateObj.getMonth() === yesterday.getMonth() &&
-    dateObj.getDate() === yesterday.getDate();
+  const yesterday = new Date(
+    todayLocal.getFullYear(),
+    todayLocal.getMonth(),
+    todayLocal.getDate() - 1
+  );
+  const isYesterday = isSameLocalDay(dateObj, yesterday);
 
   if (isYesterday) {
     if (startDateStr < dateStr) {
@@ -128,7 +181,7 @@ export default async function getOrGenerateSnapshot(dateStr) {
     return snapshot;
   }
 
-  // Not yesterday: backfill inclusive range
+  // Not yesterday (and not today): backfill inclusive range and return end snapshot
   const snapshot = await generateSnapshotRange({
     start: startDateStr,
     end: dateStr,

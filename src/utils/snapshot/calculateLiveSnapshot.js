@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../../firebase";
 import getStockPrices from "../prices/getStockPrices";
+import { computeCumulativeRealizedForDate } from "./computeCumulativeRealizedForDate";
 
 const safeParse = (val) => Number.parseFloat(val || 0);
 
@@ -49,7 +50,13 @@ export async function calculateLiveSnapshot() {
     const d = String(dtET.getDate()).padStart(2, "0");
     const yesterdayStr = `${y}-${m}-${d}`;
 
-    const prevSnapRef = doc(db, "users", user.uid, "dailySnapshots", yesterdayStr);
+    const prevSnapRef = doc(
+      db,
+      "users",
+      user.uid,
+      "dailySnapshots",
+      yesterdayStr
+    );
     const prevSnap = await getDocFromServer(prevSnapRef);
     totalDividendReceived = prevSnap.exists()
       ? safeParse(prevSnap.data()?.totalDividendReceived)
@@ -135,7 +142,8 @@ export async function calculateLiveSnapshot() {
   const totalCostBasis = totalCostBasisLong;
   const totalPLPercent =
     totalCostBasis > 0 ? unrealizedPLNet / totalCostBasis : 0;
-console.log('im calculate live snap w long and short')
+  console.log("im calculate live snap w long and short");
+
   return {
     version: 2,
     invested: totalMarketValue,
@@ -153,6 +161,10 @@ console.log('im calculate live snap w long and short')
       unrealizedPLLong,
       unrealizedPLShort,
       unrealizedPLNet,
+      realizedPL: await computeCumulativeRealizedForDate({
+        userId: user.uid,
+        dateISO: new Date().toISOString().split("T")[0],
+      }),
     },
 
     // Legacy fields expected by older components

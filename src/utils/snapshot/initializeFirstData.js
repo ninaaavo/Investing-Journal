@@ -26,6 +26,7 @@ export async function initializeFirstData(userId) {
       unrealizedPLLong: 0,
       unrealizedPLShort: 0,
       unrealizedPLNet: 0,
+      realizedPL : 0,
     },
 
     // legacy (for existing UI)
