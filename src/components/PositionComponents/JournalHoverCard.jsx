@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function JournalHoverCard({ show, entries, anchorRect }) {
   const navigate = useNavigate();
+  console.log("entries i got are", entries)
 
   const [expandedIndex, setExpandedIndex] = useState(-1); // default to first entry expanded
   if (!show || !anchorRect) return null;
@@ -26,7 +27,6 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
 
     return `${mm}/${dd}/${yy}`;
   };
-
 
   return ReactDOM.createPortal(
     <AnimatePresence>
@@ -88,9 +88,7 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                     onClick={(e) => {
                       e.stopPropagation(); // prevent hover card closing or card click
                       navigate(
-                        `/journal?id=${encodeURIComponent(
-                          entry?.id || ""
-                        )}`
+                        `/journal?id=${encodeURIComponent(entry?.id || "")}`
                       );
                     }}
                     className="text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
@@ -124,12 +122,12 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                           <span className="font-medium">P/L:</span>{" "}
                           <span
                             className={
-                              entry.pAndL.profit < 0
+                              entry.pAndL < 0
                                 ? "text-red-500"
                                 : "text-green-500"
                             }
                           >
-                            {entry.pAndL.profit} ({entry.pAndL.percent}%)
+                            ${entry.pAndL.toFixed(2)} ({(entry.pAndL/entry.averageBuyPrice).toFixed(2)}%)
                           </span>
                         </div>
                       )}
@@ -137,10 +135,8 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                       {entry.expectations && (
                         <div>
                           <span className="font-medium">Expectations:</span>{" "}
-                          {
-                            entry.expectations[entry.expectations.length - 1]
-                              .content
-                          }
+                          {entry.expectations?.[entry.expectations.length - 1]
+                            ?.content ?? ""}
                         </div>
                       )}
                       {entry.strategyFit && (
@@ -152,7 +148,8 @@ export default function JournalHoverCard({ show, entries, anchorRect }) {
                       {entry.moodLog && (
                         <div>
                           <span className="font-medium">Mood:</span>{" "}
-                          {entry.moodLog[entry.moodLog.length - 1].label}
+                          {entry.moodLog?.[entry.moodLog.length - 1]?.label ??
+                            "" }
                         </div>
                       )}
                       {entry.reflection && (
