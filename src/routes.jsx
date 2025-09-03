@@ -1,7 +1,7 @@
 import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 
-import Login from "./pages/Login";
+import Login from "./pages/LogIn";
 import Positions from "./pages/Positions";
 import Journal from "./pages/Journal";
 import SignUp from "./pages/Signup";
