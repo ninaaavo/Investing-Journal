@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { motion } from "framer-motion";
-
+import PLTimelineCard from "./PLTimeLineCard.jsx";
 import FinancialMetricsCard from "./FinancialMetricCard.jsx";
 import BehavioralMetricsCard from "./BehavioralMetricCard.jsx";
 import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
@@ -39,10 +39,11 @@ const componentMap = {
   SectorBreakdownChart,
   PerformanceInsightsCard,
   NotesCard,
+  PLTimelineCard
 };
 
 // You may tweak these defaults; they're used if the user has no saved layout yet.
-const DEFAULT_LEFT = ["FinancialMetricsCard", "BehavioralMetricsCard"];
+const DEFAULT_LEFT = ["FinancialMetricsCard", "BehavioralMetricsCard", "PLTimelineCard"];
 const DEFAULT_RIGHT = ["PerformanceInsightsCard", "SectorBreakdownChart", "NotesCard"];
 
 export default function OverviewCard({ isEditingLayout }) {
