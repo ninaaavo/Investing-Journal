@@ -57,13 +57,22 @@ const Bullets = ({ items }) =>
     </ul>
   ) : null;
 
-const StatRow = ({ label, value, suffix = "" }) =>
+const StatRow = ({ label, value }) =>
   value === null || value === undefined ? null : (
     <div className="flex items-center justify-between text-sm">
       <span className="text-gray-600">{label}</span>
-      <span className="font-medium">{String(value)}{suffix}</span>
+      <span className="font-medium">{String(value)}</span>
     </div>
   );
+
+// Currency formatter (no color decisions here; keep it simple & neutral)
+const fmtUSD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+const formatUSD = (n) =>
+  typeof n === "number" && Number.isFinite(n) ? fmtUSD.format(n) : null;
 
 export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
   const [timeframe, setTimeframe] = useState(defaultTimeframe);
@@ -176,6 +185,11 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
 
   console.log("ur slice is ", slice);
 
+  // Cash KPI accessors
+  const totalPL = slice?.kpis?.totalPL;
+  const maxDrawdownAbs = slice?.kpis?.maxDrawdownAbs;
+
+  console.log("ur total pl", totalPL  )
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -265,22 +279,11 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
 
           {(slice.kpis || slice.kpi) && (
             <div className="mt-2 space-y-1">
-              <StatRow
-                label="Total Return"
-                value={
-                  slice.kpis?.totalReturnPct?.toFixed?.(2) ??
-                  slice.kpi?.totalReturnPct?.toFixed?.(2)
-                }
-                suffix="%"
-              />
-              <StatRow
-                label="Max Drawdown"
-                value={
-                  slice.kpis?.maxDrawdownPct?.toFixed?.(2) ??
-                  slice.kpi?.maxDrawdownPct?.toFixed?.(2)
-                }
-                suffix="%"
-              />
+              {/* CASH metrics only */}
+              <StatRow label="Total P/L" value={formatUSD(totalPL)} />
+              <StatRow label="Max Drawdown (cash)" value={formatUSD(maxDrawdownAbs)} />
+
+              {/* Keep optional extras if your backend adds them later (non-% only) */}
               {slice.kpis?.bestTicker && (
                 <StatRow label="Best Ticker" value={slice.kpis.bestTicker} />
               )}
@@ -309,26 +312,25 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
         </Section>
       )}
 
-      {/* ----------------------- NEW: Behavior block ----------------------- */}
+      {/* ----------------------- Behavior block ----------------------- */}
       {behavior && (behavior.summary || behavior.stats || behavior.insights || behavior.actions) && (
         <Section title="Behavior Analysis" className="bg-gray-50">
           <MaybePara text={behavior.summary} />
 
           {behavior.stats && (
             <div className="mt-2 space-y-1">
-              <StatRow
-                label="Journal Entries"
-                value={behavior.stats.journalEntryCount}
-              />
+              <StatRow label="Journal Entries" value={behavior.stats.journalEntryCount} />
               <StatRow
                 label="Avg Confidence Score"
                 value={
                   typeof behavior.stats.avgConfidenceScore === "number"
-                    ? Number(behavior.stats.avgConfidenceScore.toFixed?.(2) ?? behavior.stats.avgConfidenceScore)
+                    ? Number(
+                        behavior.stats.avgConfidenceScore.toFixed?.(2) ??
+                          behavior.stats.avgConfidenceScore
+                      )
                     : behavior.stats.avgConfidenceScore
                 }
               />
-              {/* Add more if your backend returns them */}
               {"streakDays" in (behavior.stats || {}) && (
                 <StatRow label="Streak (days)" value={behavior.stats.streakDays} />
               )}
@@ -351,7 +353,7 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
         </Section>
       )}
 
-      {/* ----------------------- NEW: Portfolio block ---------------------- */}
+      {/* ----------------------- Portfolio block ---------------------- */}
       {portfolio && (portfolio.summary || portfolio.stats || portfolio.insights || portfolio.actions) && (
         <Section title="Portfolio Analysis" className="bg-gray-50">
           <MaybePara text={portfolio.summary} />
@@ -363,28 +365,16 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
                   label="Avg Holding Days"
                   value={
                     typeof portfolio.stats.avgHoldingDays === "number"
-                      ? Number(portfolio.stats.avgHoldingDays.toFixed?.(2) ?? portfolio.stats.avgHoldingDays)
+                      ? Number(
+                          portfolio.stats.avgHoldingDays.toFixed?.(2) ??
+                            portfolio.stats.avgHoldingDays
+                        )
                       : portfolio.stats.avgHoldingDays
                   }
                 />
               )}
-              {"totalHoldingDays" in portfolio.stats && (
-                <StatRow
-                  label="Total Holding Days"
-                  value={
-                    typeof portfolio.stats.totalHoldingDays === "number"
-                      ? Math.round(portfolio.stats.totalHoldingDays)
-                      : portfolio.stats.totalHoldingDays
-                  }
-                />
-              )}
-              {/* Surface common extras if present */}
               {"concentrationTop" in portfolio.stats && (
-                <StatRow
-                  label="Top Holding Concentration"
-                  value={portfolio.stats.concentrationTop}
-                  suffix="%"
-                />
+                <StatRow label="Top Holding Concentration" value={portfolio.stats.concentrationTop} />
               )}
             </div>
           )}
