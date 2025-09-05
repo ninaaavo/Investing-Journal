@@ -142,7 +142,6 @@ export async function calculateLiveSnapshot() {
   const totalCostBasis = totalCostBasisLong;
   const totalPLPercent =
     totalCostBasis > 0 ? unrealizedPLNet / totalCostBasis : 0;
-  console.log("im calculate live snap w long and short");
 
   return {
     version: 2,

@@ -132,7 +132,7 @@ export default function StockPriceChart({
 
   const tooltipMode = variant === "exit" ? "buy" : "sell";
   const title = variant === "exit" ? "Exit Price Chart" : "Entry Price Chart";
-  console.log("im loading stock price, w events " + series);
+  // console.log("im loading stock price, w events " + series);
   return (
     <div className="w-full rounded-xl border bg-white">
       <div className="px-3 pt-2 text-sm text-gray-600">{title}</div>

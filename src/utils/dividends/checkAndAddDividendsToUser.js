@@ -41,7 +41,6 @@ export async function checkAndAddDividendsToUser({
   dividendMap,
   writeToSnapshot = true,
 }) {
-  console.log("🟡 Efficient dividend check from", from, "to", to);
 
   const fromDate = parseDate(from);
   const toDate = parseDate(to);
@@ -85,7 +84,6 @@ export async function checkAndAddDividendsToUser({
         (totalDividendByDate[dateStr] ?? 0) + totalAmount;
     }
   }
-  console.log("Your daily div map is", dailyDividendMap)
 
   // Save all results
   for (const [dateStr, dividends] of Object.entries(dailyDividendMap)) {
@@ -118,7 +116,6 @@ export async function checkAndAddDividendsToUser({
     });
 
   }
-  console.log("im returning totaldiv by date", totalDividendByDate, "from", from, "to", to)
   return {
   dailyDividendMap,
   totalDividendByDate,

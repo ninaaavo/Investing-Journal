@@ -10,10 +10,9 @@ export default function MiniHoverCard({
   onMouseEnter,
   onMouseLeave,
 }) {
-  console.log("your anchor rect", anchorRect)
+  // console.log("your anchor rect", anchorRect)
   const navigate = useNavigate();
   if (!show || !anchorRect) return null;
-  console.log()
   const placementStyle = {
     position: "absolute",
     top: anchorRect.top+35,
