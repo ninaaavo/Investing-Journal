@@ -22,6 +22,7 @@ import BehavioralMetricsCard from "./BehavioralMetricCard.jsx";
 import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
 import PerformanceInsightsCard from "./PerformanceInsightCard.jsx";
 import NotesCard from "./NotesCard.jsx";
+import PerformanceAnalysisCard from "./PerformanceAnalysisCard.jsx";
 
 import { useUser } from "../../../context/UserContext.jsx";
 import { db } from "../../../firebase";
@@ -39,12 +40,13 @@ const componentMap = {
   SectorBreakdownChart,
   PerformanceInsightsCard,
   NotesCard,
-  PLTimelineCard
+  PLTimelineCard,
+  PerformanceAnalysisCard
 };
 
 // You may tweak these defaults; they're used if the user has no saved layout yet.
 const DEFAULT_LEFT = ["FinancialMetricsCard", "BehavioralMetricsCard", "PLTimelineCard"];
-const DEFAULT_RIGHT = ["PerformanceInsightsCard", "SectorBreakdownChart", "NotesCard"];
+const DEFAULT_RIGHT = ["PerformanceInsightsCard", "SectorBreakdownChart", "NotesCard", "PerformanceAnalysisCard"];
 
 export default function OverviewCard({ isEditingLayout }) {
   const { user } = useUser();

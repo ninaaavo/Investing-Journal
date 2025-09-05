@@ -94,8 +94,8 @@ export default function Positions() {
       return timeA - timeB;
     });
 
-    console.log("all ur matching buys", matchingBuys);
-    console.log("last buy", matchingBuys.at(-1))
+    // console.log("all ur matching buys", matchingBuys);
+    // console.log("last buy", matchingBuys.at(-1))
     setSelectedStock({
       ...stock,
       expectations: allFormattedExpectations,

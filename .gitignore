@@ -23,3 +23,6 @@ yarn-error.log*
 # optional: Firebase
 .firebase/
 .firebaserc
+
+
+server/firebase-service-account.json
