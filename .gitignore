@@ -49,3 +49,10 @@ dist
 service-account*.json
 
 .vercel
+
+# secrets
+.env
+.env.*
+*firebase-admin*.json
+*.serviceAccount.json
+
