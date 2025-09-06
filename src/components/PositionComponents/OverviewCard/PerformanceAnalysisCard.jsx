@@ -18,22 +18,19 @@ const TIMEFRAME_OPTIONS = [
  */
 const RESOLVE_API_BASE = () => {
   const fromEnv = import.meta?.env?.VITE_API_BASE;
-  const fromWindow = typeof window !== "undefined" ? window.__API_BASE__ : "";
 
-  const cleaned =
-    (fromEnv && String(fromEnv).replace(/\/+$/, "")) ||
-    (fromWindow && String(fromWindow).replace(/\/+$/, ""));
+  if (!fromEnv) {
+    throw new Error(
+      "[API_BASE] Missing VITE_API_BASE. " +
+      "Set it in your .env.local for dev and in your hosting platform’s env vars for prod."
+    );
+  }
 
-  if (cleaned) return cleaned;
-
-  const isLocal =
-    typeof window !== "undefined" &&
-    (/^localhost$|^127\.0\.0\.1$/.test(window.location.hostname) ||
-      window.location.hostname.startsWith("192.168.") ||
-      window.location.hostname.startsWith("10."));
-
-  return isLocal ? "http://localhost:3001" : "/api";
+  // strip trailing slashes
+  return String(fromEnv).replace(/\/+$/, "");
 };
+
+
 
 const API_BASE = RESOLVE_API_BASE();
 
@@ -214,9 +211,9 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
               ) : null}
             </p>
           )}
-          <p className="text-[11px] text-gray-400">
+          {/* <p className="text-[11px] text-gray-400">
             API: <code>{API_BASE}</code>
-          </p>
+          </p> */}
         </div>
 
         <div className="flex items-center gap-2">
