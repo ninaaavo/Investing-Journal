@@ -28,3 +28,7 @@ yarn-error.log*
 server/firebase-service-account.json
 
 server/*.json
+
+# Firebase service account (local only)
+apps/server/secrets/*
+*.service-account.json
