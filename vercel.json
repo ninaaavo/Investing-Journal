@@ -1,8 +1,10 @@
-  {
-          "rewrites": [
-            {
-              "source": "/(.*)",
-              "destination": "/"
-            }
-          ]
-        }
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/analyze", "destination": "/api/analyze" },
+    { "source": "/hello", "destination": "/api/hello" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}

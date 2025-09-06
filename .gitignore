@@ -32,3 +32,12 @@ server/*.json
 # Firebase service account (local only)
 apps/server/secrets/*
 *.service-account.json
+.vercel
+
+node_modules
+dist
+.env*
+!.env.example
+service-account*.json
+
+.vercel

@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { getAuth } from "firebase/auth";
+import { RESOLVE_API_BASE } from "../../../utils/apiBase";
 
 // ----- Timeframe options you support/render -----
 const TIMEFRAME_OPTIONS = [
@@ -13,26 +14,8 @@ const TIMEFRAME_OPTIONS = [
   { value: "1Y", label: "1Y" },
 ];
 
-/**
- * Resolve API base URL smartly
- */
-const RESOLVE_API_BASE = () => {
-  const fromEnv = import.meta.env.VITE_API_BASE;
-
-  if (!fromEnv) {
-    throw new Error(
-      "[API_BASE] Missing VITE_API_BASE. " +
-      "Set it in your .env.local for dev and in your hosting platform’s env vars for prod."
-    );
-  }
-
-  // strip trailing slashes
-  return String(fromEnv).replace(/\/+$/, "");
-};
-
-
-
 const API_BASE = RESOLVE_API_BASE();
+console.log("ur api base is", API_BASE);
 
 /* ------------------------- Small render helpers ------------------------- */
 const Section = ({ title, children, className = "" }) => (
@@ -49,7 +32,11 @@ const Bullets = ({ items }) =>
   Array.isArray(items) && items.length > 0 ? (
     <ul className="list-disc list-inside text-sm">
       {items.map((it, i) => (
-        <li key={i}>{typeof it === "string" ? it : it?.text ?? it?.description ?? it?.howTo}</li>
+        <li key={i}>
+          {typeof it === "string"
+            ? it
+            : it?.text ?? it?.description ?? it?.howTo}
+        </li>
       ))}
     </ul>
   ) : null;
@@ -114,7 +101,7 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
   // Normalize server response shape (expects { analyzedAt, durationMs, analysis: {...} })
   const unwrap = (data) => {
     if (!data) return null;
-    console.log("ur unwrap data is", data);
+    // console.log("ur unwrap data is", data);
 
     return {
       analyzedAt: data.analyzedAt ?? data.analysis?.analyzedAt,
@@ -153,7 +140,9 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new Error(`Request failed (${res.status}): ${text || "Server error"}`);
+        throw new Error(
+          `Request failed (${res.status}): ${text || "Server error"}`
+        );
       }
 
       const raw = await res.json();
@@ -170,7 +159,7 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
     }
   }, [getCacheKey]);
 
-  console.log("ur bundle is", bundle);
+  // console.log("ur bundle is", bundle);
 
   // Current slice for the selected timeframe
   const slice = bundle?.analysis?.[timeframe] ?? null;
@@ -180,13 +169,13 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
   const behavior = bundle?.behavior ?? bundle?.analysis?.behavior ?? null;
   const portfolio = bundle?.portfolio ?? bundle?.analysis?.portfolio ?? null;
 
-  console.log("ur slice is ", slice);
+  // console.log("ur slice is ", slice);
 
   // Cash KPI accessors
   const totalPL = slice?.kpis?.totalPL;
   const maxDrawdownAbs = slice?.kpis?.maxDrawdownAbs;
 
-  console.log("ur total pl", totalPL  )
+  console.log("ur total pl", totalPL);
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -202,7 +191,9 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">AI Performance Analysis ({timeframe})</h2>
+          <h2 className="text-xl font-semibold">
+            AI Performance Analysis ({timeframe})
+          </h2>
           {bundle?.analyzedAt && (
             <p className="text-xs text-gray-500 mt-1">
               Analyzed on {formatWhen(bundle.analyzedAt)}
@@ -278,7 +269,10 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
             <div className="mt-2 space-y-1">
               {/* CASH metrics only */}
               <StatRow label="Total P/L" value={formatUSD(totalPL)} />
-              <StatRow label="Max Drawdown (cash)" value={formatUSD(maxDrawdownAbs)} />
+              <StatRow
+                label="Max Drawdown (cash)"
+                value={formatUSD(maxDrawdownAbs)}
+              />
 
               {/* Keep optional extras if your backend adds them later (non-% only) */}
               {slice.kpis?.bestTicker && (
@@ -310,87 +304,109 @@ export default function PerformanceAnalysisCard({ defaultTimeframe = "ALL" }) {
       )}
 
       {/* ----------------------- Behavior block ----------------------- */}
-      {behavior && (behavior.summary || behavior.stats || behavior.insights || behavior.actions) && (
-        <Section title="Behavior Analysis" className="bg-gray-50">
-          <MaybePara text={behavior.summary} />
+      {behavior &&
+        (behavior.summary ||
+          behavior.stats ||
+          behavior.insights ||
+          behavior.actions) && (
+          <Section title="Behavior Analysis" className="bg-gray-50">
+            <MaybePara text={behavior.summary} />
 
-          {behavior.stats && (
-            <div className="mt-2 space-y-1">
-              <StatRow label="Journal Entries" value={behavior.stats.journalEntryCount} />
-              <StatRow
-                label="Avg Confidence Score"
-                value={
-                  typeof behavior.stats.avgConfidenceScore === "number"
-                    ? Number(
-                        behavior.stats.avgConfidenceScore.toFixed?.(2) ??
-                          behavior.stats.avgConfidenceScore
-                      )
-                    : behavior.stats.avgConfidenceScore
-                }
-              />
-              {"streakDays" in (behavior.stats || {}) && (
-                <StatRow label="Streak (days)" value={behavior.stats.streakDays} />
-              )}
-            </div>
-          )}
-
-          {Array.isArray(behavior.insights) && behavior.insights.length > 0 && (
-            <div className="mt-3">
-              <h4 className="font-medium text-sm mb-1">Insights</h4>
-              <Bullets items={behavior.insights} />
-            </div>
-          )}
-
-          {Array.isArray(behavior.actions) && behavior.actions.length > 0 && (
-            <div className="mt-3">
-              <h4 className="font-medium text-sm mb-1">Suggested Habits</h4>
-              <Bullets items={behavior.actions} />
-            </div>
-          )}
-        </Section>
-      )}
-
-      {/* ----------------------- Portfolio block ---------------------- */}
-      {portfolio && (portfolio.summary || portfolio.stats || portfolio.insights || portfolio.actions) && (
-        <Section title="Portfolio Analysis" className="bg-gray-50">
-          <MaybePara text={portfolio.summary} />
-
-          {portfolio.stats && (
-            <div className="mt-2 space-y-1">
-              {"avgHoldingDays" in portfolio.stats && (
+            {behavior.stats && (
+              <div className="mt-2 space-y-1">
                 <StatRow
-                  label="Avg Holding Days"
+                  label="Journal Entries"
+                  value={behavior.stats.journalEntryCount}
+                />
+                <StatRow
+                  label="Avg Confidence Score"
                   value={
-                    typeof portfolio.stats.avgHoldingDays === "number"
+                    typeof behavior.stats.avgConfidenceScore === "number"
                       ? Number(
-                          portfolio.stats.avgHoldingDays.toFixed?.(2) ??
-                            portfolio.stats.avgHoldingDays
+                          behavior.stats.avgConfidenceScore.toFixed?.(2) ??
+                            behavior.stats.avgConfidenceScore
                         )
-                      : portfolio.stats.avgHoldingDays
+                      : behavior.stats.avgConfidenceScore
                   }
                 />
-              )}
-              {"concentrationTop" in portfolio.stats && (
-                <StatRow label="Top Holding Concentration" value={portfolio.stats.concentrationTop} />
-              )}
-            </div>
-          )}
+                {"streakDays" in (behavior.stats || {}) && (
+                  <StatRow
+                    label="Streak (days)"
+                    value={behavior.stats.streakDays}
+                  />
+                )}
+              </div>
+            )}
 
-          {Array.isArray(portfolio.insights) && portfolio.insights.length > 0 && (
-            <div className="mt-3">
-              <h4 className="font-medium text-sm mb-1">Insights</h4>
-              <Bullets items={portfolio.insights} />
-            </div>
-          )}
+            {Array.isArray(behavior.insights) &&
+              behavior.insights.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="font-medium text-sm mb-1">Insights</h4>
+                  <Bullets items={behavior.insights} />
+                </div>
+              )}
 
-          {Array.isArray(portfolio.actions) && portfolio.actions.length > 0 && (
-            <div className="mt-3">
-              <h4 className="font-medium text-sm mb-1">Recommended Actions</h4>
-              <Bullets items={portfolio.actions} />
-            </div>
-          )}
-        </Section>
-      )}
+            {Array.isArray(behavior.actions) && behavior.actions.length > 0 && (
+              <div className="mt-3">
+                <h4 className="font-medium text-sm mb-1">Suggested Habits</h4>
+                <Bullets items={behavior.actions} />
+              </div>
+            )}
+          </Section>
+        )}
+
+      {/* ----------------------- Portfolio block ---------------------- */}
+      {portfolio &&
+        (portfolio.summary ||
+          portfolio.stats ||
+          portfolio.insights ||
+          portfolio.actions) && (
+          <Section title="Portfolio Analysis" className="bg-gray-50">
+            <MaybePara text={portfolio.summary} />
+
+            {portfolio.stats && (
+              <div className="mt-2 space-y-1">
+                {"avgHoldingDays" in portfolio.stats && (
+                  <StatRow
+                    label="Avg Holding Days"
+                    value={
+                      typeof portfolio.stats.avgHoldingDays === "number"
+                        ? Number(
+                            portfolio.stats.avgHoldingDays.toFixed?.(2) ??
+                              portfolio.stats.avgHoldingDays
+                          )
+                        : portfolio.stats.avgHoldingDays
+                    }
+                  />
+                )}
+                {"concentrationTop" in portfolio.stats && (
+                  <StatRow
+                    label="Top Holding Concentration"
+                    value={portfolio.stats.concentrationTop}
+                  />
+                )}
+              </div>
+            )}
+
+            {Array.isArray(portfolio.insights) &&
+              portfolio.insights.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="font-medium text-sm mb-1">Insights</h4>
+                  <Bullets items={portfolio.insights} />
+                </div>
+              )}
+
+            {Array.isArray(portfolio.actions) &&
+              portfolio.actions.length > 0 && (
+                <div className="mt-3">
+                  <h4 className="font-medium text-sm mb-1">
+                    Recommended Actions
+                  </h4>
+                  <Bullets items={portfolio.actions} />
+                </div>
+              )}
+          </Section>
+        )}
     </motion.div>
   );
 }

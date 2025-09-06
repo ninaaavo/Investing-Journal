@@ -15,6 +15,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import HelloCard from "./HelloCard.jsx";
 import { motion } from "framer-motion";
 import PLTimelineCard from "./PLTimeLineCard.jsx";
 import FinancialMetricsCard from "./FinancialMetricCard.jsx";
