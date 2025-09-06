@@ -26,3 +26,5 @@ yarn-error.log*
 
 
 server/firebase-service-account.json
+
+server/*.json
