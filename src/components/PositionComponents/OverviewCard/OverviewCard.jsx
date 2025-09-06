@@ -17,7 +17,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import HelloCard from "./HelloCard.jsx";
 import { motion } from "framer-motion";
-import PLTimelineCard from "./PLTimeLineCard.jsx";
+import PLTimelineCard from "./PLTimelineCard.jsx";
 import FinancialMetricsCard from "./FinancialMetricCard.jsx";
 import BehavioralMetricsCard from "./BehavioralMetricCard.jsx";
 import SectorBreakdownChart from "./SectorBreakdownChart.jsx";
