@@ -17,7 +17,7 @@ const TIMEFRAME_OPTIONS = [
  * Resolve API base URL smartly
  */
 const RESOLVE_API_BASE = () => {
-  const fromEnv = import.meta?.env?.VITE_API_BASE;
+  const fromEnv = import.meta.env.VITE_API_BASE;
 
   if (!fromEnv) {
     throw new Error(
