@@ -24,10 +24,18 @@ yarn-error.log*
 .firebase/
 .firebaserc
 
+# secrets
+.env
+.env.*
+firebase-admin*.json
+*.serviceAccount.json
+server/
+functions/.runtimeconfig.json
 
-server/firebase-service-account.json
 
-server/*.json
+api/firebase-service-account.json
+
+api/*.json
 
 # Firebase service account (local only)
 apps/server/secrets/*
